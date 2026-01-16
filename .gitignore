@@ -1,0 +1,15 @@
+*.json
+*.pdf
+.ipynb_checkpoints
+/spark-warehouse
+*.txt
+*.csv
+*.xml
+.idea
+*.xlsx
+data/*
+cas_pdf/*
+__pycache__
+salary_format.ipynb
+Mf.ipynb
+!data/mf-props.csv

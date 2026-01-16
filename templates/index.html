@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Intelligence V3.5</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- SIDEBAR NAVIGATION -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Menu</h3>
+            <button class="close-btn" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="side-tab-btn" onclick="scrollToSection('overview')"><i class="fas fa-home"></i>
+                Overview</button>
+            <button class="side-tab-btn" onclick="scrollToSection('gains')"><i class="fas fa-chart-line"></i> Gains
+                Analysis</button>
+            <button class="side-tab-btn" onclick="scrollToSection('investments')"><i class="fas fa-history"></i>
+                Investment Summary</button>
+            <button class="side-tab-btn" onclick="scrollToSection('allocations')"><i class="fas fa-pie-chart"></i>
+                Allocations</button>
+            <button class="side-tab-btn" onclick="scrollToSection('xirr')"><i class="fas fa-percentage"></i> XIRR &
+                Returns</button>
+            <button class="side-tab-btn" onclick="scrollToSection('rolling')"><i class="fas fa-wave-square"></i>
+                Rolling Returns</button>
+            <button class="side-tab-btn" onclick="scrollToSection('comparison')"><i class="fas fa-balance-scale"></i>
+                Performance Comparison</button>
+            <button class="side-tab-btn" onclick="scrollToSection('management')"><i class="fas fa-cog"></i>
+                Management & Refresh</button>
+        </nav>
+    </div>
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <div class="container wide">
+        <header id="top-header" class="sticky-header">
+            <div class="header-left">
+                <button class="hamburger-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="header-brand">
+                    <h1>Portfolio Intelligence <span class="badge">PRO</span></h1>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="header-right">
+                    <div id="cat-multiselect" class="custom-multiselect">
+                        <div class="select-box" onclick="toggleMultiselect('cat-options')">
+                            <span id="selected-cats-label">All Categories</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="cat-options" class="options-container"></div>
+                    </div>
+
+                    <div id="activity-multiselect" class="custom-multiselect">
+                        <div class="select-box" onclick="toggleMultiselect('activity-options')">
+                            <span id="selected-activity-label">All Activity</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div id="activity-options" class="options-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button id="hide-zero-btn" class="action-btn active" onclick="toggleZeroHoldings()">
+                    <i class="fas fa-eye-slash"></i> <span>Hide Zero</span>
+                </button>
+                <p class="last-updated" id="last-updated">...</p>
+            </div>
+        </header>
+
+        <!-- CONTINUOUS SCROLLING SECTIONS -->
+        <main class="page-content">
+
+            <!-- OVERVIEW SECTION -->
+            <section id="overview" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-home"></i> Portfolio Overview</h2>
+                </div>
+                <div class="kpi-grid">
+                    <div class="card kpi-card">
+                        <p class="kpi-label">Current Value</p>
+                        <p class="kpi-value highlight" id="ov-current">₹0</p>
+                        <p class="kpi-sub" id="ov-invested">Cost: ₹0</p>
+                    </div>
+                    <div class="card kpi-card">
+                        <p class="kpi-label">Unrealized Gain</p>
+                        <p class="kpi-value" id="ov-unrealized">₹0</p>
+                        <p class="kpi-sub">Market Growth</p>
+                    </div>
+                    <div class="card kpi-card">
+                        <p class="kpi-label">Realized Gain</p>
+                        <p class="kpi-value" id="ov-realized">₹0</p>
+                        <p class="kpi-sub">Booked Profits</p>
+                    </div>
+                    <div class="card kpi-card">
+                        <p class="kpi-label">Total Profit</p>
+                        <p class="kpi-value" id="ov-total-profit">₹0</p>
+                        <p class="kpi-sub" id="ov-abs-ret">0.00% Absolute</p>
+                    </div>
+                    <div class="card kpi-card">
+                        <p class="kpi-label">Portfolio XIRR</p>
+                        <p class="kpi-value" id="ov-xirr">0%</p>
+                        <p class="kpi-sub">Annualized Return</p>
+                    </div>
+                </div>
+
+                <div class="card full-width-chart">
+                    <div class="chart-header">
+                        <h3>Wealth Evolution (Stacked)</h3>
+                        <div class="chart-legend">
+                            <span class="dot invested"></span> Principal
+                            <span class="dot gains"></span> Growth
+                        </div>
+                    </div>
+                    <div class="chart-container large">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GAINS ANALYSIS SECTION -->
+            <section id="gains" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-line"></i> Gains Analysis</h2>
+                </div>
+
+                <div class="layout-flex">
+                    <div class="gains-main-col">
+                        <div class="card">
+                            <div class="card-header-flex">
+                                <h3>Scheme-level Profitability Analysis</h3>
+                                <div class="search-container">
+                                    <input type="text" id="scheme-search" placeholder="Search schemes..."
+                                        oninput="filterTable()">
+                                </div>
+                            </div>
+                            <div class="table-container expanded">
+                                <table class="sortable-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2" onclick="sortData('Fund Name')">Scheme Name <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th rowspan="2" onclick="sortData('invested_val')">Invested <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th rowspan="2" onclick="sortData('current_val')">Current Val <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th colspan="2" class="merged-header">Unrealized Gain</th>
+                                            <th rowspan="2" onclick="sortData('total_profit')">Net Profit <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th rowspan="2" onclick="sortData('abs_return')">ROI % <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th rowspan="2" onclick="sortData('xirr')">XIRR % <i
+                                                    class="fas fa-sort"></i></th>
+                                            <th colspan="2" class="merged-header">Unrealized LTCG Only</th>
+                                        </tr>
+                                        <tr class="sub-header">
+                                            <th onclick="sortData('unrealized_stcg')">STCG <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th onclick="sortData('unrealized_ltcg')">LTCG <i class="fas fa-sort"></i>
+                                            </th>
+                                            <th>Units</th>
+                                            <th>Gains</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scheme-gain-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gains-side-col">
+                        <div class="card">
+                            <h3>Taxation Summary</h3>
+                            <div class="gain-row sub">
+                                <span>Unrealized STCG</span>
+                                <span id="unrealized-stcg" class="money">₹0</span>
+                            </div>
+                            <div class="gain-row sub">
+                                <span>Unrealized LTCG</span>
+                                <span id="unrealized-ltcg" class="money">₹0</span>
+                            </div>
+                            <div class="total-row sub">
+                                <span>Total Unrealized</span>
+                                <span id="unrealized-total" class="money">₹0</span>
+                            </div>
+                            <hr style="opacity:0.1; margin: 1rem 0;">
+                            <div class="gain-row sub">
+                                <span>Realized STCG</span>
+                                <span id="realized-stcg" class="money">₹0</span>
+                            </div>
+                            <div class="gain-row sub">
+                                <span>Realized LTCG</span>
+                                <span id="realized-ltcg" class="money">₹0</span>
+                            </div>
+                            <div class="total-row sub">
+                                <span>Total Realized</span>
+                                <span id="realized-total" class="money">₹0</span>
+                            </div>
+                        </div>
+
+                        <!-- TRANSITION PLANNING INSIDE SIDE COL OR FULL WIDTH? USER SAID GAIN ANALYSIS HALF WIDTH -->
+                        <div class="card">
+                            <h3>Transition Planning (STCG \u2192 LTCG)</h3>
+                            <p class="card-sub">Next 90 Days. Click headers to expand.</p>
+                            <div class="table-container small">
+                                <table class="collapsible-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Bucket / Scheme</th>
+                                            <th style="text-align:right">Gain</th>
+                                            <th style="text-align:right">Cum.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="transition-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- INVESTMENT SUMMARY SECTION -->
+            <section id="investments" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> Investment Summary</h2>
+                </div>
+
+                <div class="card full-width-chart">
+                    <div class="chart-header">
+                        <h3>Total Monthly Investment Trends</h3>
+                    </div>
+                    <div class="chart-container large">
+                        <canvas id="investmentTrendChart"></canvas>
+                    </div>
+                    <div class="chart-legend-bottom">
+                        <span class="dot actual"></span> Monthly Actual
+                        <span class="dot ma3"></span> 3M Avg
+                        <span class="dot ma6"></span> 6M Avg
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-flex">
+                        <h3>Monthly Investment Pivot</h3>
+                    </div>
+                    <p class="card-sub">Color-coded: <span class="positive">Green</span> for increase, <span
+                            class="negative">Red</span> for decrease vs previous month.</p>
+                    <div class="table-container expanded horizontal-scroll">
+                        <table id="investment-pivot-table">
+                            <thead id="investment-pivot-head"></thead>
+                            <tbody id="investment-pivot-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ALLOCATIONS SECTION -->
+            <section id="allocations" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-pie-chart"></i> Portfolio Allocations</h2>
+                </div>
+                <div class="grid-2x2 split">
+                    <div class="card pie-card">
+                        <h3>Asset Category</h3>
+                        <div class="chart-container small"><canvas id="catChart"></canvas></div>
+                    </div>
+                    <div class="card pie-card">
+                        <h3>AMC Concentration</h3>
+                        <div class="chart-container small"><canvas id="amcChart"></canvas></div>
+                    </div>
+                    <div class="card pie-card">
+                        <h3>Investment Type</h3>
+                        <div class="chart-container small"><canvas id="typeChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- XIRR SECTION (Renamed/Contextualized) -->
+            <section id="xirr" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-percentage"></i> Portfolio Performance</h2>
+                </div>
+                <div class="card compact">
+                    <h3>Overall Portfolio XIRR</h3>
+                    <p>Calculated across entire portfolio history.</p>
+                    <div class="kpi-value center highlight" id="xirr-main" style="text-align: center; padding: 1rem 0;">
+                        0%</div>
+                </div>
+            </section>
+
+            <!-- ROLLING RETURNS SECTION -->
+            <section id="rolling" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-wave-square"></i> Rolling Returns Consistency</h2>
+                </div>
+                <div class="card full-width-chart">
+                    <div class="chart-header">
+                        <h3>Historical Return Distribution</h3>
+                        <div class="filter-pills" id="rolling-period-filters">
+                            <button class="pill-btn active" onclick="updateRollingView('1Y')">1 Year</button>
+                            <button class="pill-btn" onclick="updateRollingView('3Y')">3 Year</button>
+                            <button class="pill-btn" onclick="updateRollingView('5Y')">5 Year</button>
+                        </div>
+                    </div>
+                    <div class="table-container expanded horizontal-scroll">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortRolling('name')" style="cursor:pointer">Fund Name <i
+                                            class="fas fa-sort"></i></th>
+                                    <th onclick="sortRolling('latest')" style="text-align:right; cursor:pointer">Latest
+                                        <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortRolling('min')" style="text-align:right; cursor:pointer">Min <i
+                                            class="fas fa-sort"></i></th>
+                                    <th onclick="sortRolling('max')" style="text-align:right; cursor:pointer">Max <i
+                                            class="fas fa-sort"></i></th>
+                                    <th onclick="sortRolling('mean')"
+                                        style="text-align:right; cursor:pointer; color:var(--accent)">Average <i
+                                            class="fas fa-sort"></i></th>
+                                    <th onclick="sortRolling('median')" style="text-align:right; cursor:pointer">Median
+                                        <i class="fas fa-sort"></i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="rolling-stats-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PERFORMANCE COMPARISON SECTION -->
+            <section id="comparison" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-balance-scale"></i> Performance Alpha (Investor vs Fund)</h2>
+                </div>
+                <div class="card">
+                    <div class="card-header-flex">
+                        <h3>CAGR Delta Analysis</h3>
+                    </div>
+                    <p class="card-sub">Comparing your personal XIRR vs Fund's Point-to-Point CAGR since your first
+                        investment.</p>
+                    <div class="table-container expanded horizontal-scroll">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Fund Name</th>
+                                    <th style="text-align:right">Your XIRR</th>
+                                    <th style="text-align:right">Fund CAGR</th>
+                                    <th style="text-align:right">Alpha / Delta</th>
+                                    <th style="text-align:right">Holding Period</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MANAGEMENT SECTION -->
+            <section id="management" class="page-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-cog"></i> System Management</h2>
+                </div>
+
+                <div class="management-grid">
+                    <div class="card">
+                        <h3>Operations</h3>
+                        <div class="mgmt-actions">
+                            <button class="action-btn active" id="btn-refresh-nav" onclick="refreshNAV()">
+                                <i class="fas fa-sync-alt"></i> <span>Refresh NAV</span>
+                            </button>
+
+                            <div class="upload-management">
+                                <button class="action-btn" id="btn-select-pdf" onclick="triggerUpload()">
+                                    <i class="fas fa-file-medical"></i> <span id="selected-filename">Select CAS
+                                        PDF</span>
+                                </button>
+                                <input type="file" id="cas-upload" accept=".pdf" style="display:none"
+                                    onchange="updateFilename(event)">
+
+                                <div class="password-group">
+                                    <input type="password" id="cas-password" placeholder="CAS PDF Password">
+                                    <button class="action-btn upload-trigger" id="btn-upload-pdf"
+                                        onclick="handleFileUpload()" disabled>
+                                        <i class="fas fa-upload"></i> <span>Upload & Process</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button id="external-link-btn" class="action-btn" style="width: 100%; margin-top: 10px;"
+                                onclick="openExternalUrl()">
+                                <i class="fas fa-external-link-alt"></i> <span>Get CAS Statement (CAMS/KFintech)</span>
+                            </button>
+                        </div>
+                        <div id="op-status" class="status-msg"></div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Data Health (Last Update)</h3>
+                        <div class="stats-list">
+                            <div class="stat-item">
+                                <span class="stat-label">Last File Mod:</span>
+                                <span id="stat-file-date" class="stat-val highlight">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Last MF Transaction:</span>
+                                <span id="stat-txn-date" class="stat-val highlight">Loading...</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Last NAV Update:</span>
+                                <span id="stat-nav-date" class="stat-val highlight">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="main-footer">
+            <p>© 2026 Portfolio Intelligence. Advanced Analytics Engine.</p>
+        </footer>
+
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
