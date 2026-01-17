@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Portfolio Intelligence</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .mgmt-table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .editable-cell input,
+        .editable-cell select {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: 100%;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .save-btn {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .save-btn:hover {
+            opacity: 0.9;
+        }
+
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container wide">
+        <header class="sticky-header">
+            <div class="header-left">
+                <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+                <div class="header-brand">
+                    <h1>System Settings</h1>
+                </div>
+            </div>
+        </header>
+
+        <main class="page-content">
+            <div class="settings-grid">
+                <!-- MANAGEMENT SECTION (MOVED) -->
+                <section class="card">
+                    <div class="settings-header">
+                        <h2><i class="fas fa-cog"></i> Operations & Refresh</h2>
+                    </div>
+                    <div class="management-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="mgmt-actions">
+                            <button class="action-btn active" id="btn-refresh-nav" onclick="refreshNAV()">
+                                <i class="fas fa-sync-alt"></i> <span>Refresh NAV</span>
+                            </button>
+
+                            <button class="action-btn active" id="btn-refresh-data" onclick="refreshData()"
+                                style="margin-top: 10px; width: 100%;">
+                                <i class="fas fa-database"></i> <span>Refresh Dashboard Data</span>
+                            </button>
+
+                            <div class="upload-management">
+                                <button class="action-btn" id="btn-select-pdf" onclick="triggerUpload()">
+                                    <i class="fas fa-file-medical"></i> <span id="selected-filename">Select CAS
+                                        PDF</span>
+                                </button>
+                                <input type="file" id="cas-upload" accept=".pdf" style="display:none"
+                                    onchange="updateFilename(event)">
+
+                                <div class="password-group">
+                                    <input type="password" id="cas-password" placeholder="CAS PDF Password">
+                                    <button class="action-btn upload-trigger" id="btn-upload-pdf"
+                                        onclick="handleFileUpload()" disabled>
+                                        <i class="fas fa-upload"></i> <span>Upload & Process</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button id="external-link-btn" class="action-btn" style="width: 100%; margin-top: 10px;"
+                                onclick="window.open('https://www.camsonline.com/Investors/Statements/Consolidated-Account-Statement', '_blank')">
+                                <i class="fas fa-external-link-alt"></i> <span>Get CAS Statement</span>
+                            </button>
+                        </div>
+
+                        <div class="stats-list card" style="background: rgba(0,0,0,0.2)">
+                            <h3>Data Health</h3>
+                            <div id="op-status" class="status-msg"></div>
+                            <div class="stat-item">
+                                <span class="stat-label">Last File Mod:</span>
+                                <span id="stat-file-date" class="stat-val highlight">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Last NAV Update:</span>
+                                <span id="stat-nav-date" class="stat-val highlight">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- MUTUAL FUND PROPERTIES -->
+                <section class="card">
+                    <div class="settings-header">
+                        <h2><i class="fas fa-building"></i> Mutual Fund Properties</h2>
+                        <button class="save-btn" onclick="saveMFProps()">Save Changes</button>
+                    </div>
+                    <div class="mgmt-table-container">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Fund Name</th>
+                                    <th>ISIN</th>
+                                    <th>Type</th>
+                                    <th>Sector</th>
+                                    <th>Cap</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mf-props-body">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- MARKET INDICES -->
+                <section class="card">
+                    <div class="settings-header">
+                        <h2><i class="fas fa-chart-line"></i> Market Indices</h2>
+                        <button class="save-btn" onclick="saveIndices()">Save Changes</button>
+                    </div>
+                    <div class="mgmt-table-container">
+                        <table class="sortable-table">
+                            <thead>
+                                <tr>
+                                    <th>Ticker</th>
+                                    <th>Name</th>
+                                    <th>Importance</th>
+                                    <th>Category</th>
+                                </tr>
+                            </thead>
+                            <tbody id="indices-body">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Settings specific JS
+        let mfData = [];
+        let indicesData = [];
+
+        async function loadSettingsData() {
+            try {
+                const [propsRes, indicesRes, statsRes] = await Promise.all([
+                    fetch('/api/mf-props'),
+                    fetch('/api/indices'),
+                    fetch('/api/data')
+                ]);
+
+                mfData = await propsRes.json();
+                indicesData = await indicesRes.json();
+                const dashboardData = await statsRes.json();
+
+                renderMFProps();
+                renderIndices();
+
+                // Set stats if available
+                if (dashboardData.data_stats) {
+                    document.getElementById('stat-file-date').textContent = dashboardData.data_stats.last_file_date;
+                    document.getElementById('stat-nav-date').textContent = dashboardData.data_stats.last_nav_date;
+                }
+            } catch (e) {
+                console.error("Load settings error", e);
+            }
+        }
+
+        function renderMFProps() {
+            const body = document.getElementById('mf-props-body');
+            body.innerHTML = mfData.map((item, idx) => `
+                <tr>
+                    <td>${item.Name}</td>
+                    <td>${item.ISIN}</td>
+                    <td class="editable-cell">
+                        <select onchange="updateMFProp(${idx}, 'Type', this.value)">
+                            <option value="Equity" ${item.Type === 'Equity' ? 'selected' : ''}>Equity</option>
+                            <option value="Equity-ELSS" ${item.Type === 'Equity-ELSS' ? 'selected' : ''}>Equity-ELSS</option>
+                            <option value="Equity-Arbitrage" ${item.Type === 'Equity-Arbitrage' ? 'selected' : ''}>Equity-Arbitrage</option>
+                            <option value="Debt" ${item.Type === 'Debt' ? 'selected' : ''}>Debt</option>
+                            <option value="Hybrid" ${item.Type === 'Hybrid' ? 'selected' : ''}>Hybrid</option>
+                            <option value="Commodity" ${item.Type === 'Commodity' ? 'selected' : ''}>Commodity</option>
+                            <option value="Others" ${item.Type === 'Others' ? 'selected' : ''}>Others</option>
+                        </select>
+                    </td>
+                    <td class="editable-cell">
+                        <input type="text" value="${item.Sector || 'Others'}" onchange="updateMFProp(${idx}, 'Sector', this.value)">
+                    </td>
+                    <td class="editable-cell">
+                        <input type="text" value="${item.Cap || 'Others'}" onchange="updateMFProp(${idx}, 'Cap', this.value)">
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderIndices() {
+            const body = document.getElementById('indices-body');
+            body.innerHTML = indicesData.map((item, idx) => `
+                <tr>
+                    <td>${item.Ticker}</td>
+                    <td>${item.Name}</td>
+                    <td class="editable-cell">
+                        <select onchange="updateIndex(${idx}, 'Importance', this.value)">
+                            <option value="important" ${item.Importance === 'important' ? 'selected' : ''}>Important</option>
+                            <option value="normal" ${item.Importance === 'normal' ? 'selected' : ''}>Normal</option>
+                        </select>
+                    </td>
+                    <td class="editable-cell">
+                        <input type="text" value="${item.Category}" onchange="updateIndex(${idx}, 'Category', this.value)">
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateMFProp(idx, key, val) { mfData[idx][key] = val; }
+        function updateIndex(idx, key, val) { indicesData[idx][key] = val; }
+
+        async function saveMFProps() {
+            const res = await fetch('/api/mf-props', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(mfData)
+            });
+            if (res.ok) alert("MF Properties saved!");
+        }
+
+        async function saveIndices() {
+            const res = await fetch('/api/indices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(indicesData)
+            });
+            if (res.ok) alert("Indices saved!");
+        }
+
+        async function refreshData() {
+            const btn = document.getElementById('btn-refresh-data');
+            const status = document.getElementById('op-status');
+
+            btn.disabled = true;
+            status.textContent = "Recalculating analytics...";
+            status.className = "status-msg info";
+
+            try {
+                const res = await fetch('/api/refresh/data', { method: 'POST' });
+                const result = await res.json();
+
+                if (res.ok) {
+                    status.textContent = "Data refreshed successfully!";
+                    status.className = "status-msg success";
+                    // Reload stats
+                    loadSettingsData();
+                } else {
+                    status.textContent = "Error: " + result.message;
+                    status.className = "status-msg error";
+                }
+            } catch (e) {
+                status.textContent = "Failed to refresh: " + e;
+                status.className = "status-msg error";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        window.onload = loadSettingsData;
+    </script>
+</body>
+
+</html>

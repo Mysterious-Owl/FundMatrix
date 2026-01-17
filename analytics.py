@@ -39,16 +39,52 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
     if os.path.exists(props_csv):
         try:
             p_df = pd.read_csv(props_csv)
-            props_map = dict(zip(p_df['ISIN'], p_df['Type']))
-        except: pass
+            # Store full info in props_map
+            for _, p_row in p_df.iterrows():
+                props_map[p_row['ISIN']] = {
+                    'Type': p_row['Type'],
+                    'Sector': p_row.get('Sector', 'Others'),
+                    'Cap': p_row.get('Cap', 'Others')
+                }
+        except Exception as e:
+            print(f"Error loading props: {e}")
 
     def categorize(isin, name):
-        if isin in props_map: return props_map[isin]
+        if isin in props_map: return props_map[isin]['Type']
         n = str(name).lower()
-        if any(x in n for x in ['liquid', 'overnight', 'money manager']): return 'Debt'
-        if 'gold' in n: return 'Commodity'
-        if any(x in n for x in ['arbitrage', 'balance', 'hybrid', 'dynamic']): return 'Hybrid'
-        return 'Equity'
+        # Default logic for auto-categorization
+        cat = 'Equity'
+        if any(x in n for x in ['liquid', 'overnight', 'money manager']): cat = 'Debt'
+        elif 'gold' in n: cat = 'Commodity'
+        elif any(x in n for x in ['arbitrage', 'balance', 'hybrid', 'dynamic']): cat = 'Hybrid'
+        return cat
+
+    def get_mf_prop(isin, prop_name):
+        if isin in props_map: return props_map[isin].get(prop_name, 'Others')
+        return 'Others'
+
+    # Identify missing ISINs
+    all_isins = cams_df[['ISIN', 'Name']].drop_duplicates()
+    new_props = []
+    updated = False
+    for _, row in all_isins.iterrows():
+        isin = row['ISIN']
+        if isin not in props_map:
+            cat = categorize(isin, row['Name'])
+            # Initial defaults for new funds
+            props_map[isin] = {'Type': cat, 'Sector': 'Others', 'Cap': 'Others'}
+            new_props.append({'Name': row['Name'], 'ISIN': isin, 'Type': cat, 'Sector': 'Others', 'Cap': 'Others'})
+            updated = True
+    
+    if updated and os.path.exists(props_csv):
+        try:
+            old_props = pd.read_csv(props_csv)
+            new_df = pd.DataFrame(new_props)
+            combined_props = pd.concat([old_props, new_df], ignore_index=True).drop_duplicates(subset=['ISIN'])
+            combined_props.to_csv(props_csv, index=False)
+            print(f"Auto-discovered {len(new_props)} new funds and updated {props_csv}")
+        except Exception as e:
+            print(f"Failed to auto-update mf-props: {e}")
 
     unified_df['Category'] = unified_df.apply(lambda x: categorize(x['ISIN'], x['Fund Name']), axis=1)
 
@@ -77,22 +113,40 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
     real_lt = realized_df[realized_df['Type'] == 'LTCG'].groupby('ISIN')['Gain'].sum().to_dict() if not realized_df.empty else {}
     net_inv_map = cams_df.groupby('ISIN')['Amount'].sum().to_dict()
 
+    # Aggregate realized gains for easier lookup
+    realized_summary = {}
+    for isin, gain in real_st.items():
+        realized_summary.setdefault(isin, {'realized_gain': 0, 'realized_stcg': 0, 'realized_ltcg': 0})['realized_gain'] += gain
+        realized_summary[isin]['realized_stcg'] += gain
+    for isin, gain in real_lt.items():
+        realized_summary.setdefault(isin, {'realized_gain': 0, 'realized_stcg': 0, 'realized_ltcg': 0})['realized_gain'] += gain
+        realized_summary[isin]['realized_ltcg'] += gain
+
     scheme_list = []
     for _, r in scheme_agg.iterrows():
         isin = r['ISIN']
         ni = net_inv_map.get(isin, r['invested_val'])
-        rst = real_st.get(isin, 0)
-        rlt = real_lt.get(isin, 0)
-        scheme_list.append({
-            'Fund Name': r['Fund Name'], 'ISIN': isin, 'Category': r['Category'], 'AMC': r['AMC'],
-            'ActivityState': get_activity_state(isin),
-            'invested_val': round(ni, 2), 'current_val': round(r['current_val'], 2),
-            'units': round(r['Units'], 4), 'lt_units': round(ltcg_units.get(isin, 0), 4),
-            'unrealized_gain': round(r['unrealized_gain'], 2), 'unrealized_stcg': round(stcg_unreal.get(isin, 0), 2),
-            'unrealized_ltcg': round(ltcg_unreal.get(isin, 0), 2), 'realized_stcg': round(rst, 2), 'realized_ltcg': round(rlt, 2),
-            'total_profit': round(r['unrealized_gain'] + rst + rlt, 2),
-            'abs_return': round(((r['unrealized_gain'] + rst + rlt) / ni * 100) if ni > 0 else 0, 4)
-        })
+        
+        detail = r.to_dict()
+        detail['invested_val'] = round(ni, 2)
+        detail['current_val'] = round(r['current_val'], 2)
+        detail['units'] = round(r['Units'], 4)
+        detail['lt_units'] = round(ltcg_units.get(isin, 0), 4)
+        detail['unrealized_gain'] = round(r['unrealized_gain'], 2)
+        detail['unrealized_stcg'] = round(stcg_unreal.get(isin, 0), 2)
+        detail['unrealized_ltcg'] = round(ltcg_unreal.get(isin, 0), 2)
+        detail['realized_stcg'] = round(realized_summary.get(isin, {}).get('realized_stcg', 0), 2)
+        detail['realized_ltcg'] = round(realized_summary.get(isin, {}).get('realized_ltcg', 0), 2)
+        
+        total_profit = detail['unrealized_gain'] + realized_summary.get(isin, {}).get('realized_gain', 0)
+        detail['total_profit'] = round(total_profit, 2)
+        detail['abs_return'] = round((total_profit / ni * 100) if ni > 0 else 0, 4)
+        
+        detail['ActivityState'] = get_activity_state(isin)
+        detail['Sector'] = get_mf_prop(isin, 'Sector')
+        detail['Cap'] = get_mf_prop(isin, 'Cap')
+        
+        scheme_list.append(detail)
 
     # --- CASH FLOWS (XIRR) ---
     cash_flows = []
@@ -111,12 +165,15 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
 
     # --- INVESTMENT SUMMARY ---
     # Unified filter mapping
-    isin_activity = {s['ISIN']: s['ActivityState'] for s in scheme_list}
-    unified_df['ActivityState'] = unified_df['ISIN'].map(isin_activity)
+    isin_meta = {s['ISIN']: {'ActivityState': s['ActivityState'], 'Sector': s['Sector'], 'Cap': s['Cap']} for s in scheme_list}
+    unified_df['ActivityState'] = unified_df['ISIN'].map(lambda x: isin_meta.get(x, {}).get('ActivityState', 'Others'))
+    unified_df['Sector'] = unified_df['ISIN'].map(lambda x: isin_meta.get(x, {}).get('Sector', 'Others'))
+    unified_df['Cap'] = unified_df['ISIN'].map(lambda x: isin_meta.get(x, {}).get('Cap', 'Others'))
+    
     unified_df['MonthName'] = unified_df['Date'].dt.strftime('%b')
     unified_df['Year'] = unified_df['Date'].dt.year
     unified_df['DateKey'] = unified_df['Date'].dt.strftime('%Y-%m')
-    inv_pivot = unified_df.groupby(['ISIN', 'Fund Name', 'Category', 'ActivityState', 'Year', 'MonthName', 'DateKey'])['Amount'].sum().reset_index()
+    inv_pivot = unified_df.groupby(['ISIN', 'Fund Name', 'Category', 'ActivityState', 'AMC', 'Sector', 'Cap', 'Year', 'MonthName', 'DateKey'])['Amount'].sum().reset_index()
     inv_pivot.rename(columns={'MonthName': 'Month'}, inplace=True)
     
     m_keys = sorted(unified_df['DateKey'].unique().tolist())
@@ -195,6 +252,8 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
         i_cum = all_ev.groupby('Date')['Cost'].sum().cumsum()
         n_piv = nav_history.pivot_table(index='date', columns='isin', values='nav').sort_index().ffill()
         f_idx = pd.date_range(all_ev['Date'].min(), now, freq='ME')
+        if f_idx[-1] < now:
+            f_idx = f_idx.union([pd.Timestamp(now)])
         # Prepare ISIN to Category mapping for easier sum in JS
         isin_to_cat = {s['ISIN']: s['Category'] for s in scheme_list}
         
@@ -240,7 +299,11 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
         "investment_summary": monthly_investment_data,
         "allocations": { "amc": unified_df[unified_df['units_left'] > 0].groupby('AMC')['current_val'].sum().sort_values(ascending=False).to_dict(), "category": unified_df[unified_df['units_left'] > 0].groupby('Category')['current_val'].sum().sort_values(ascending=False).to_dict() },
         "growth_chart": growth_chart, "scheme_details": scheme_list, 
-        "categories": sorted(unified_df['Category'].unique().tolist()), "activity_states": ["Active", "Recent", "Closed"],
+        "categories": sorted(unified_df['Category'].unique().tolist()), 
+        "amcs": sorted(unified_df['AMC'].unique().tolist()),
+        "sectors": sorted(list(set(s['Sector'] for s in scheme_list))),
+        "caps": sorted(list(set(s['Cap'] for s in scheme_list))),
+        "activity_states": ["Active", "Recent", "Closed"],
         "cash_flows": cash_flows, "transition_planning": [],
         "rolling_stats": rolling_stats,
         "performance_comparison": perf_comparison,
@@ -273,7 +336,22 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
     st_lots = unified_df[unified_df['gain_type'] == 'STCG'].copy()
     for _, l in st_lots.iterrows():
         dl = 365 - (now - l['Date']).days
-        if 0 < dl <= 90: dashboard_data["transition_planning"].append({'scheme': l['Fund Name'], 'units': round(l['units_left'], 4), 'gain': round(l['unrealized_gain'], 2), 'days_left': dl, 'date': l['Date'].strftime('%Y-%m-%d'), 'category': l['Category']})
+        if 0 < dl <= 90:
+            isin = l['ISIN']
+            meta = isin_meta.get(isin, {})
+            dashboard_data["transition_planning"].append({
+                'ISIN': isin,
+                'scheme': l['Fund Name'],
+                'units': round(l['units_left'], 4),
+                'gain': round(l['unrealized_gain'], 2),
+                'days_left': dl,
+                'date': l['Date'].strftime('%Y-%m-%d'),
+                'Category': l['Category'],
+                'AMC': l['AMC'],
+                'Sector': meta.get('Sector', 'Others'),
+                'Cap': meta.get('Cap', 'Others'),
+                'ActivityState': meta.get('ActivityState', 'Others')
+            })
     dashboard_data["transition_planning"].sort(key=lambda x: x['days_left'])
 
     return dashboard_data

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 import json
 import os
+import pandas as pd
 import threading
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -76,6 +77,50 @@ def refresh_nav():
     success, msg = run_pipeline(force_nav=True)
     if success: return jsonify({"status": "success", "message": msg})
     return jsonify({"status": "error", "message": msg}), 500
+
+@app.route('/api/refresh/data', methods=['POST'])
+def refresh_data():
+    success, msg = run_pipeline()
+    if success: return jsonify({"status": "success", "message": msg})
+    return jsonify({"status": "error", "message": msg}), 500
+
+@app.route('/settings')
+def settings():
+    return render_template('settings.html')
+
+@app.route('/api/mf-props', methods=['GET', 'POST'])
+def handle_mf_props():
+    props_path = 'data/mf-props.csv'
+    if request.method == 'GET':
+        if not os.path.exists(props_path):
+            return jsonify([])
+        df = pd.read_csv(props_path)
+        # Handle NaN for valid JSON
+        df = df.fillna("")
+        return jsonify(df.to_dict('records'))
+    else:
+        # POST: Update or Append
+        data = request.json
+        df = pd.DataFrame(data)
+        df.to_csv(props_path, index=False)
+        return jsonify({"status": "success"})
+
+@app.route('/api/indices', methods=['GET', 'POST'])
+def handle_indices():
+    indices_path = 'data/indices.csv'
+    if request.method == 'GET':
+        if not os.path.exists(indices_path):
+            return jsonify([])
+        df = pd.read_csv(indices_path)
+        # Handle NaN for valid JSON
+        df = df.fillna("")
+        return jsonify(df.to_dict('records'))
+    else:
+        # POST: Update full list
+        data = request.json
+        df = pd.DataFrame(data)
+        df.to_csv(indices_path, index=False)
+        return jsonify({"status": "success"})
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():

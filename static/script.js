@@ -3,9 +3,31 @@ let currentSort = { column: 'current_val', order: 'desc' };
 let hideZero = true;
 let selectedCategories = [];
 let selectedActivities = [];
+let selectedAMCs = [];
+let selectedSectors = [];
+let selectedCaps = [];
+
+const CHART_FILTER_TYPES = {
+    'catChart': 'category', 'catXirrChart': 'category',
+    'amcChart': 'amc', 'amcXirrChart': 'amc',
+    'sectorChart': 'sector', 'sectorXirrChart': 'sector',
+    'capChart': 'cap', 'capXirrChart': 'cap'
+};
+let activeModalChartId = null;
+let activeModalTitle = null;
 let searchQuery = "";
 let collapsedBuckets = new Set();
 let currentRollingSort = { column: 'mean', order: 'desc' };
+let currentGrowthRange = 'ALL';
+let currentTrendRange = 'ALL';
+
+// Register Plugin and Globally Disable by Default
+if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set('plugins.datalabels', {
+        display: false
+    });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -49,10 +71,42 @@ function calculateJS_XIRR(cashFlows) {
     return rate * 100;
 }
 
+// --- FORMATTERS & HELPERS ---
+function fmtSmartValue(v) {
+    const abs = Math.abs(v);
+    if (abs >= 100000) return (v / 100000).toFixed(1) + 'L';
+    if (abs >= 1000) return (v / 1000).toFixed(0) + 'k';
+    return v.toFixed(0);
+}
+
+function getSmartScale(dataPoints) {
+    if (!dataPoints || dataPoints.length === 0) return { min: 0, max: 100 };
+    const minVal = Math.min(...dataPoints);
+    const maxVal = Math.max(...dataPoints);
+
+    let yMin = minVal - Math.abs(minVal) * 0.05;
+    let yMax = maxVal + Math.abs(maxVal) * 0.05;
+
+    // Rule: minimum can be 0 only if -5% of min is less than 0
+    if (yMin < 0 && minVal >= 0) yMin = 0;
+
+    return { min: yMin, max: yMax };
+}
+
+// NAVIGATION LOGIC
 // NAVIGATION LOGIC
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar || !overlay) return;
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
+}
+
+function toggleFilterSidebar() {
+    const sidebar = document.getElementById('filter-sidebar');
+    const overlay = document.getElementById('filter-overlay');
+    if (!sidebar || !overlay) return;
     sidebar.classList.toggle('active');
     overlay.classList.toggle('active');
 }
@@ -92,18 +146,21 @@ function toggleMultiselect(id) {
     document.getElementById(id).classList.toggle('active');
 }
 
-function updateSelectedCatsDisplay() {
-    const label = document.getElementById('selected-cats-label');
-    if (selectedCategories.length === 0) label.textContent = "All Categories";
-    else if (selectedCategories.length === 1) label.textContent = selectedCategories[0];
-    else label.textContent = `${selectedCategories.length} Categories Selected`;
-}
-
-function updateSelectedActivityDisplay() {
-    const label = document.getElementById('selected-activity-label');
-    if (selectedActivities.length === 0) label.textContent = "All Activity";
-    else if (selectedActivities.length === 1) label.textContent = selectedActivities[0];
-    else label.textContent = `${selectedActivities.length} Activity Types`;
+function updateSelectedFilterLabels() {
+    const filters = [
+        { list: selectedCategories, labelId: 'selected-cats-label', default: 'All Categories', suffix: 'Categories' },
+        { list: selectedAMCs, labelId: 'selected-amc-label', default: 'All AMCs', suffix: 'AMCs' },
+        { list: selectedSectors, labelId: 'selected-sector-label', default: 'All Sectors', suffix: 'Sectors' },
+        { list: selectedCaps, labelId: 'selected-cap-label', default: 'All Caps', suffix: 'Caps' },
+        { list: selectedActivities, labelId: 'selected-activity-label', default: 'All Activity', suffix: 'Activity Types' }
+    ];
+    filters.forEach(f => {
+        const el = document.getElementById(f.labelId);
+        if (!el) return;
+        if (f.list.length === 0) el.textContent = f.default;
+        else if (f.list.length === 1) el.textContent = f.list[0];
+        else el.textContent = `${f.list.length} ${f.suffix} Selected`;
+    });
 }
 
 function initializeDashboard() {
@@ -111,16 +168,49 @@ function initializeDashboard() {
     const catContainer = document.getElementById('cat-options');
     catContainer.innerHTML = dashboardData.categories.map(cat => `
         <div class="option" onclick="toggleFilter('category', '${cat}', event)">
-            <input type="checkbox" id="check-cat-${cat}" ${selectedCategories.includes(cat) ? 'checked' : ''}>
+            <input type="checkbox" id="check-category-${cat}" ${selectedCategories.includes(cat) ? 'checked' : ''}>
             <label>${cat}</label>
         </div>
     `).join('');
+
+    // Populate AMCs
+    const amcContainer = document.getElementById('amc-options');
+    if (amcContainer && dashboardData.amcs && dashboardData.amcs.length) {
+        amcContainer.innerHTML = dashboardData.amcs.map(amc => `
+            <div class="option" onclick="toggleFilter('amc', '${amc}', event)">
+                <input type="checkbox" id="check-amc-${amc}" ${selectedAMCs.includes(amc) ? 'checked' : ''}>
+                <label>${amc}</label>
+            </div>
+        `).join('');
+    }
+
+    // Populate Sectors
+    const sectorContainer = document.getElementById('sector-options');
+    if (sectorContainer && dashboardData.sectors && dashboardData.sectors.length) {
+        sectorContainer.innerHTML = dashboardData.sectors.map(s => `
+            <div class="option" onclick="toggleFilter('sector', '${s}', event)">
+                <input type="checkbox" id="check-sector-${s}" ${selectedSectors.includes(s) ? 'checked' : ''}>
+                <label>${s}</label>
+            </div>
+        `).join('');
+    }
+
+    // Populate Caps
+    const capContainer = document.getElementById('cap-options');
+    if (capContainer && dashboardData.caps && dashboardData.caps.length) {
+        capContainer.innerHTML = dashboardData.caps.map(c => `
+            <div class="option" onclick="toggleFilter('cap', '${c}', event)">
+                <input type="checkbox" id="check-cap-${c}" ${selectedCaps.includes(c) ? 'checked' : ''}>
+                <label>${c}</label>
+            </div>
+        `).join('');
+    }
 
     // Populate Activity States
     const activityContainer = document.getElementById('activity-options');
     activityContainer.innerHTML = dashboardData.activity_states.map(state => `
         <div class="option" onclick="toggleFilter('activity', '${state}', event)">
-            <input type="checkbox" id="check-act-${state}" ${selectedActivities.includes(state) ? 'checked' : ''}>
+            <input type="checkbox" id="check-activity-${state}" ${selectedActivities.includes(state) ? 'checked' : ''}>
             <label>${state}</label>
         </div>
     `).join('');
@@ -134,16 +224,36 @@ function initializeDashboard() {
 
 function toggleFilter(type, value, event) {
     if (event) event.stopPropagation();
-    let list = type === 'category' ? selectedCategories : selectedActivities;
+    const map = {
+        'category': selectedCategories,
+        'activity': selectedActivities,
+        'amc': selectedAMCs,
+        'sector': selectedSectors,
+        'cap': selectedCaps
+    };
+    let list = map[type];
     const idx = list.indexOf(value);
     if (idx > -1) list.splice(idx, 1);
     else list.push(value);
 
-    const checkbox = document.getElementById(`check-${type === 'category' ? 'cat' : 'act'}-${value}`);
+    const checkbox = document.getElementById(`check-${type}-${value}`);
     if (checkbox) checkbox.checked = !checkbox.checked;
 
-    if (type === 'category') updateSelectedCatsDisplay();
-    else updateSelectedActivityDisplay();
+    updateSelectedFilterLabels();
+    refreshAll();
+}
+
+function clearAllFilters() {
+    selectedCategories = [];
+    selectedActivities = [];
+    selectedAMCs = [];
+    selectedSectors = [];
+    selectedCaps = [];
+
+    // Uncheck all checkboxes
+    document.querySelectorAll('.options-container input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+    updateSelectedFilterLabels();
     refreshAll();
 }
 
@@ -158,11 +268,11 @@ function refreshAll() {
     renderGains();
     renderInvestments();
     renderAllocations();
-    renderXirr();
     renderTransitionTable();
     renderRollingStats();
     renderComparison();
     renderStats();
+    if (activeModalChartId) renderModalChart();
 }
 
 function toggleZeroHoldings() {
@@ -195,6 +305,9 @@ function getFilteredData() {
     let filtered = dashboardData.scheme_details;
     if (selectedCategories.length > 0) filtered = filtered.filter(s => selectedCategories.includes(s.Category));
     if (selectedActivities.length > 0) filtered = filtered.filter(s => selectedActivities.includes(s.ActivityState));
+    if (selectedAMCs.length > 0) filtered = filtered.filter(s => selectedAMCs.includes(s.AMC));
+    if (selectedSectors.length > 0) filtered = filtered.filter(s => selectedSectors.includes(s.Sector));
+    if (selectedCaps.length > 0) filtered = filtered.filter(s => selectedCaps.includes(s.Cap));
     if (hideZero) filtered = filtered.filter(s => s.current_val > 0);
     return filtered;
 }
@@ -205,6 +318,111 @@ function getFilteredCashFlows() {
     const activeISINs = new Set(getFilteredData().map(s => s.ISIN));
     filtered = filtered.filter(cf => activeISINs.has(cf.isin));
     return filtered;
+}
+
+function filterDataByRange(data, range, dateField = 'date') {
+    if (range === 'ALL' || !data || data.length === 0) return data;
+    const now = new Date();
+    const rangeMap = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '3Y': 36, '5Y': 60 };
+    const months = rangeMap[range];
+    const cutoff = new Date();
+    cutoff.setMonth(now.getMonth() - months);
+    return data.filter(d => new Date(d[dateField]) >= cutoff);
+}
+
+function updateGrowthRange(range) {
+    currentGrowthRange = range;
+    document.querySelectorAll('#growth-range-filters .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === range || (range === 'ALL' && btn.textContent === 'All'));
+    });
+    renderOverview();
+}
+
+function updateTrendRange(range) {
+    currentTrendRange = range;
+    document.querySelectorAll('#trend-range-filters .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === range || (range === 'ALL' && btn.textContent === 'All'));
+    });
+    renderInvestments();
+}
+
+function expandChart(chartId, title) {
+    activeModalChartId = chartId;
+    activeModalTitle = title;
+    const originalChart = Chart.getChart(chartId);
+    if (!originalChart) return;
+
+    document.getElementById('modal-chart-title').textContent = title;
+    const modal = document.getElementById('chart-modal');
+    modal.classList.add('active');
+
+    // Populate Modal Range Filters if it's a line chart
+    const filterContainer = document.getElementById('modal-range-filters');
+    filterContainer.innerHTML = '';
+    if (chartId === 'growthChart' || chartId === 'investmentTrendChart') {
+        const currentRange = (chartId === 'growthChart') ? currentGrowthRange : currentTrendRange;
+        const ranges = ['1M', '6M', '1Y', 'ALL'];
+        ranges.forEach(r => {
+            const btn = document.createElement('button');
+            btn.className = `pill-btn ${r === currentRange ? 'active' : ''}`;
+            btn.textContent = r === 'ALL' ? 'All' : r;
+            btn.onclick = () => updateModalRange(r);
+            filterContainer.appendChild(btn);
+        });
+    }
+
+    renderModalChart();
+}
+
+function renderModalChart() {
+    if (!activeModalChartId) return;
+    const originalChart = Chart.getChart(activeModalChartId);
+    if (!originalChart) return;
+
+    const modalCtx = document.getElementById('modalChart').getContext('2d');
+    const existing = Chart.getChart('modalChart');
+    if (existing) existing.destroy();
+
+    // Reconstruct chart for modal with optimizations for speed
+    new Chart(modalCtx, {
+        type: originalChart.config.type,
+        data: originalChart.data,
+        options: {
+            ...originalChart.options,
+            maintainAspectRatio: false,
+            animation: { duration: 0 }, // Disable animation for instant modal feel
+            plugins: {
+                ...originalChart.options.plugins,
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { color: '#cbd5e1', font: { size: 12 } }
+                }
+            }
+        }
+    });
+}
+
+function updateModalRange(range) {
+    if (activeModalChartId === 'growthChart') {
+        updateGrowthRange(range);
+    } else if (activeModalChartId === 'investmentTrendChart') {
+        updateTrendRange(range);
+    }
+
+    // Refresh modal filters UI
+    document.querySelectorAll('#modal-range-filters .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === range || (range === 'ALL' && btn.textContent === 'All'));
+    });
+
+    // Re-render modal chart with newly filtered data from global refresh
+    renderModalChart();
+}
+
+function closeModal() {
+    activeModalChartId = null;
+    activeModalTitle = null;
+    document.getElementById('chart-modal').classList.remove('active');
 }
 
 function renderOverview() {
@@ -247,27 +465,33 @@ function renderOverview() {
         return { date: dp.date, value: totalVal, invested: totalInv };
     }).filter(d => d.value > 0 || d.invested > 0);
 
+    const filteredGrowth = filterDataByRange(aggregatedGrowth, currentGrowthRange, 'date');
+
     const growthCtx = document.getElementById('growthChart').getContext('2d');
     const existingGrowth = Chart.getChart('growthChart');
     if (existingGrowth) existingGrowth.destroy();
     new Chart(growthCtx, {
         type: 'line', data: {
-            labels: aggregatedGrowth.map(d => d.date),
+            labels: filteredGrowth.map(d => d.date),
             datasets: [
-                { label: 'Market Value', data: aggregatedGrowth.map(d => d.value), borderColor: '#22d3ee', backgroundColor: 'rgba(34, 211, 238, 0.4)', fill: true, tension: 0.2, pointRadius: 0 },
-                { label: 'Capital Invested', data: aggregatedGrowth.map(d => d.invested), borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.6)', fill: 0, tension: 0.1, pointRadius: 0, borderDash: [5, 5] }
+                { label: 'Market Value', data: filteredGrowth.map(d => d.value), borderColor: '#22d3ee', backgroundColor: 'rgba(34, 211, 238, 0.4)', fill: true, tension: 0.2, pointRadius: 0 },
+                { label: 'Capital Invested', data: filteredGrowth.map(d => d.invested), borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.6)', fill: 0, tension: 0.1, pointRadius: 0, borderDash: [5, 5] }
             ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
             plugins: {
-                legend: { position: 'top', align: 'end', labels: { color: '#64748b', boxWidth: 10, font: { size: 10 } } },
+                legend: { display: false },
                 tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtMoney(c.raw)}` } }
             },
             scales: {
                 x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
-                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', callback: (v) => '₹' + (v / 100000).toFixed(1) + 'L' } }
+                y: {
+                    ...getSmartScale([...filteredGrowth.map(d => d.value), ...filteredGrowth.map(d => d.invested)]),
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#64748b', callback: (v) => '₹' + fmtSmartValue(v) }
+                }
             }
         }
     });
@@ -331,8 +555,10 @@ function toggleBucket(label) {
 function renderTransitionTable() {
     const tableBody = document.getElementById('transition-body');
     if (!tableBody || !dashboardData.transition_planning) return;
-    let filtered = dashboardData.transition_planning;
-    if (selectedCategories.length > 0) filtered = filtered.filter(p => selectedCategories.includes(p.category));
+
+    // Use universal filtering based on the currently passing schemes
+    const filteredISINs = new Set(getFilteredData().map(s => s.ISIN));
+    let filtered = dashboardData.transition_planning.filter(p => filteredISINs.has(p.ISIN));
     const buckets = [{ label: 'Inside 7 Days', max: 7 }, { label: '8 - 14 Days', max: 14 }, { label: '15 - 30 Days', max: 30 }, { label: '1 - 2 Months', max: 60 }, { label: '2 - 3 Months', max: 90 }];
     const grouped = {};
     buckets.forEach(b => grouped[b.label] = { items: [], totalGain: 0 });
@@ -372,6 +598,10 @@ function renderInvestments() {
     let filteredPivot = allPivot;
     if (selectedCategories.length > 0) filteredPivot = filteredPivot.filter(p => selectedCategories.includes(p.Category));
     if (selectedActivities.length > 0) filteredPivot = filteredPivot.filter(p => selectedActivities.includes(p.ActivityState));
+    if (selectedAMCs.length > 0) filteredPivot = filteredPivot.filter(p => selectedAMCs.includes(p.AMC));
+    if (selectedSectors.length > 0) filteredPivot = filteredPivot.filter(p => selectedSectors.includes(p.Sector));
+    if (selectedCaps.length > 0) filteredPivot = filteredPivot.filter(p => selectedCaps.includes(p.Cap));
+
     if (hideZero) {
         const activeISINs = new Set(dashboardData.scheme_details.filter(s => s.current_val > 0).map(s => s.ISIN));
         filteredPivot = filteredPivot.filter(p => activeISINs.has(p.ISIN));
@@ -391,12 +621,15 @@ function renderInvestments() {
         for (let i = Math.max(0, idx - 5); i <= idx; i++) { sum6 += totalsMap[mKeys[i]]; count6++; }
 
         return {
+            date: mKeys[idx], // Re-add date for filtering
             Month: mKeys[idx].split('-').reverse().join(' '), // Approx "01 2024" type
             Amount: amt,
             MA3: sum3 / count3,
             MA6: sum6 / count6
         };
     });
+
+    const filteredTrends = filterDataByRange(totalsData, currentTrendRange, 'date');
 
     // 1. RENDER TREND CHART (DYNAMICALY FILTERED)
     const trendCtx = document.getElementById('investmentTrendChart');
@@ -406,11 +639,11 @@ function renderInvestments() {
         new Chart(trendCtx.getContext('2d'), {
             type: 'line',
             data: {
-                labels: totalsData.map(t => t.Month),
+                labels: filteredTrends.map(t => t.Month),
                 datasets: [
-                    { label: 'Net Monthly Investment', data: totalsData.map(t => t.Amount), borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 3, pointRadius: 4, tension: 0.3, fill: true },
-                    { label: '3M Avg', data: totalsData.map(t => t.MA3), borderColor: '#22d3ee', borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0.4 },
-                    { label: '6M Avg', data: totalsData.map(t => t.MA6), borderColor: '#f43f5e', borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0.4 }
+                    { label: 'Net Monthly Investment', data: filteredTrends.map(t => t.Amount), borderColor: '#6366f1', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderWidth: 3, pointRadius: 4, tension: 0.3, fill: true },
+                    { label: '3M Avg', data: filteredTrends.map(t => t.MA3), borderColor: '#22d3ee', borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0.4 },
+                    { label: '6M Avg', data: filteredTrends.map(t => t.MA6), borderColor: '#f43f5e', borderDash: [5, 5], fill: false, pointRadius: 0, tension: 0.4 }
                 ]
             },
             options: {
@@ -422,7 +655,11 @@ function renderInvestments() {
                 },
                 scales: {
                     x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
-                    y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    y: {
+                        ...getSmartScale([...filteredTrends.map(t => t.Amount), ...filteredTrends.map(t => t.MA3), ...filteredTrends.map(t => t.MA6)]),
+                        ticks: { color: '#64748b', callback: (v) => '₹' + fmtSmartValue(v) },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    }
                 }
             }
         });
@@ -547,31 +784,186 @@ function renderColumnTotals(years, fundsMap, ALL_MONTHS) {
 
 function renderAllocations() {
     const filtered = getFilteredData();
-    const catMap = {}; const amcMap = {};
+    const cashFlows = dashboardData.cash_flows;
+
+    // 1. Groupings for Pie (Value based)
+    const catVal = {}; const amcVal = {}; const sectorVal = {}; const capVal = {};
     filtered.filter(s => s.current_val > 0).forEach(s => {
-        catMap[s.Category] = (catMap[s.Category] || 0) + s.current_val;
-        amcMap[s.AMC] = (amcMap[s.AMC] || 0) + s.current_val;
+        catVal[s.Category] = (catVal[s.Category] || 0) + s.current_val;
+        amcVal[s.AMC] = (amcVal[s.AMC] || 0) + s.current_val;
+        sectorVal[s.Sector || 'Others'] = (sectorVal[s.Sector || 'Others'] || 0) + s.current_val;
+        capVal[s.Cap || 'Others'] = (capVal[s.Cap || 'Others'] || 0) + s.current_val;
     });
-    renderPie('catChart', catMap);
-    renderPie('amcChart', amcMap);
+
+    renderPie('catChart', catVal);
+    renderPie('amcChart', amcVal);
+    renderPie('sectorChart', sectorVal);
+    renderPie('capChart', capVal);
+
+    // 2. Groupings for Bar (XIRR based)
+    const isinMeta = {};
+    filtered.forEach(s => {
+        isinMeta[s.ISIN] = { cat: s.Category, amc: s.AMC, sector: s.Sector || 'Others', cap: s.Cap || 'Others' };
+    });
+
+    const calculateSegmentXIRR = (groupByKey) => {
+        const segments = {};
+        cashFlows.forEach(cf => {
+            const meta = isinMeta[cf.isin];
+            if (!meta) return;
+            const segment = meta[groupByKey];
+            if (!segments[segment]) segments[segment] = [];
+            segments[segment].push(cf);
+        });
+
+        const results = {};
+        Object.entries(segments).forEach(([name, flows]) => {
+            // Calculate XIRR for this segment's flows
+            results[name] = calculateJS_XIRR(flows);
+        });
+        return results;
+    };
+
+    renderBar('catXirrChart', calculateSegmentXIRR('cat'));
+    renderBar('amcXirrChart', calculateSegmentXIRR('amc'));
+    renderBar('sectorXirrChart', calculateSegmentXIRR('sector'));
+    renderBar('capXirrChart', calculateSegmentXIRR('cap'));
 }
 
-function renderXirr() {
-    const flows = getFilteredCashFlows();
-    const x = calculateJS_XIRR(flows);
-    if (document.getElementById('xirr-main')) document.getElementById('xirr-main').textContent = `${x.toFixed(2)}%`;
+function renderBar(canvasId, dataObj) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const existing = Chart.getChart(canvas); if (existing) existing.destroy();
+
+    const entries = Object.entries(dataObj)
+        .filter(([k, v]) => Math.abs(v) > 0.01) // Filter out negligible/zero XIRR
+        .sort((a, b) => b[1] - a[1]);
+
+    const labels = entries.map(e => e[0]);
+    const values = entries.map(e => e[1]);
+
+    new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: values.map(v => v >= 0 ? 'rgba(74, 222, 128, 0.5)' : 'rgba(239, 68, 68, 0.5)'),
+                borderColor: values.map(v => v >= 0 ? '#4ade80' : '#ef4444'),
+                borderWidth: 1,
+                borderRadius: 4,
+                barThickness: entries.length > 5 ? 'flex' : 25
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick: (event, elements, chart) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const label = chart.data.labels[index];
+                    const type = CHART_FILTER_TYPES[canvasId];
+                    if (type) toggleFilter(type, label);
+                }
+            },
+            onHover: (event, elements) => {
+                event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => `XIRR: ${context.parsed.y.toFixed(2)}%`
+                    }
+                },
+                datalabels: { display: false } // Ensure datalabels are off for bars
+            },
+            scales: {
+                y: {
+                    ...getSmartScale(values),
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10 },
+                        callback: (v) => v.toFixed(1) + '%'
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 9 },
+                        autoSkip: false,
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
 }
+
 
 function renderPie(canvasId, dataObj) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const existing = Chart.getChart(canvas); if (existing) existing.destroy();
+
+    const dataValues = Object.values(dataObj);
+    const dataLabels = Object.keys(dataObj);
+    const total = dataValues.reduce((a, b) => a + b, 0);
+
     new Chart(canvas.getContext('2d'), {
-        type: 'doughnut', data: {
-            labels: Object.keys(dataObj),
-            datasets: [{ data: Object.values(dataObj), backgroundColor: ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#ef4444', '#f87171', '#fb923c', '#fbbf24', '#a3e635'], borderWidth: 0 }]
+        type: 'doughnut',
+        data: {
+            labels: dataLabels,
+            datasets: [{
+                data: dataValues,
+                backgroundColor: ['#6366f1', '#ec4899', '#8b5cf6', '#14b8a6', '#f59e0b', '#ef4444', '#f87171', '#fb923c', '#fbbf24', '#a3e635'],
+                borderWidth: 0
+            }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1', boxWidth: 10, font: { size: 10 } } } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            onClick: (event, elements, chart) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const label = chart.data.labels[index];
+                    const type = CHART_FILTER_TYPES[canvasId];
+                    if (type) toggleFilter(type, label);
+                }
+            },
+            onHover: (event, elements) => {
+                event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            const label = context.label || '';
+                            const value = context.parsed;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                            return `${label}: ₹${fmtPrice(value)} (${percentage})`;
+                        }
+                    }
+                },
+                datalabels: {
+                    display: (context) => {
+                        const val = context.dataset.data[context.dataIndex];
+                        return (val / total) > 0.1; // Only show if > 10%
+                    },
+                    formatter: (value, context) => {
+                        return context.chart.data.labels[context.dataIndex];
+                    },
+                    color: '#fff',
+                    font: { weight: 'bold', size: 10 },
+                    anchor: 'center',
+                    align: 'center'
+                }
+            }
+        }
     });
 }
 

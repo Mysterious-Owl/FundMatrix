@@ -33,8 +33,6 @@
                 Rolling Returns</button>
             <button class="side-tab-btn" onclick="scrollToSection('comparison')"><i class="fas fa-balance-scale"></i>
                 Performance Comparison</button>
-            <button class="side-tab-btn" onclick="scrollToSection('management')"><i class="fas fa-cog"></i>
-                Management & Refresh</button>
         </nav>
     </div>
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
@@ -50,29 +48,12 @@
                 </div>
             </div>
 
-            <div class="header-center">
-                <div class="header-right">
-                    <div id="cat-multiselect" class="custom-multiselect">
-                        <div class="select-box" onclick="toggleMultiselect('cat-options')">
-                            <span id="selected-cats-label">All Categories</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                        <div id="cat-options" class="options-container"></div>
-                    </div>
-
-                    <div id="activity-multiselect" class="custom-multiselect">
-                        <div class="select-box" onclick="toggleMultiselect('activity-options')">
-                            <span id="selected-activity-label">All Activity</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                        <div id="activity-options" class="options-container"></div>
-                    </div>
-                </div>
-            </div>
-
             <div class="header-right">
-                <button id="hide-zero-btn" class="action-btn active" onclick="toggleZeroHoldings()">
-                    <i class="fas fa-eye-slash"></i> <span>Hide Zero</span>
+                <a href="/settings" class="icon-btn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </a>
+                <button class="icon-btn" onclick="toggleFilterSidebar()" title="Filters">
+                    <i class="fas fa-filter"></i>
                 </button>
                 <p class="last-updated" id="last-updated">...</p>
             </div>
@@ -116,14 +97,107 @@
 
                 <div class="card full-width-chart">
                     <div class="chart-header">
-                        <h3>Wealth Evolution (Stacked)</h3>
-                        <div class="chart-legend">
-                            <span class="dot invested"></span> Principal
-                            <span class="dot gains"></span> Growth
+                        <div class="header-main">
+                            <h3>Portfolio Wealth Journey</h3>
+                            <div class="filter-pills" id="growth-range-filters">
+                                <button class="pill-btn" onclick="updateGrowthRange('1M')">1M</button>
+                                <button class="pill-btn" onclick="updateGrowthRange('3M')">3M</button>
+                                <button class="pill-btn" onclick="updateGrowthRange('6M')">6M</button>
+                                <button class="pill-btn" onclick="updateGrowthRange('1Y')">1Y</button>
+                                <button class="pill-btn" onclick="updateGrowthRange('3Y')">3Y</button>
+                                <button class="pill-btn" onclick="updateGrowthRange('5Y')">5Y</button>
+                                <button class="pill-btn active" onclick="updateGrowthRange('ALL')">All</button>
+                            </div>
+                        </div>
+                        <div class="chart-actions">
+                            <button class="icon-btn" onclick="expandChart('growthChart', 'Portfolio Wealth Journey')">
+                                <i class="fas fa-expand-arrows-alt"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="chart-container large">
                         <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="pie-grid-row">
+                    <div class="card pie-card">
+                        <div class="card-header-flex">
+                            <h3>Asset Category</h3>
+                            <button class="icon-btn" onclick="expandChart('catChart', 'Asset Category Allocation')">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="chart-container small"><canvas id="catChart"></canvas></div>
+                        <div class="xirr-bar-container">
+                            <div class="card-header-flex" style="margin-bottom: 0.5rem;">
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
+                                </h4>
+                                <button class="icon-btn"
+                                    onclick="expandChart('catXirrChart', 'Asset Category XIRR Performance')">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                            <div class="chart-container small"><canvas id="catXirrChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="card pie-card">
+                        <div class="card-header-flex">
+                            <h3>AMC Concentration</h3>
+                            <button class="icon-btn" onclick="expandChart('amcChart', 'AMC Concentration Allocation')">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="chart-container small"><canvas id="amcChart"></canvas></div>
+                        <div class="xirr-bar-container">
+                            <div class="card-header-flex" style="margin-bottom: 0.5rem;">
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
+                                </h4>
+                                <button class="icon-btn" onclick="expandChart('amcXirrChart', 'AMC XIRR Performance')">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                            <div class="chart-container small"><canvas id="amcXirrChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="card pie-card">
+                        <div class="card-header-flex">
+                            <h3>Sector Allocation</h3>
+                            <button class="icon-btn" onclick="expandChart('sectorChart', 'Sector Allocation')">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="chart-container small"><canvas id="sectorChart"></canvas></div>
+                        <div class="xirr-bar-container">
+                            <div class="card-header-flex" style="margin-bottom: 0.5rem;">
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
+                                </h4>
+                                <button class="icon-btn"
+                                    onclick="expandChart('sectorXirrChart', 'Sector XIRR Performance')">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                            <div class="chart-container small"><canvas id="sectorXirrChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="card pie-card">
+                        <div class="card-header-flex">
+                            <h3>Cap Allocation</h3>
+                            <button class="icon-btn" onclick="expandChart('capChart', 'Cap Allocation')">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                        <div class="chart-container small"><canvas id="capChart"></canvas></div>
+                        <div class="xirr-bar-container">
+                            <div class="card-header-flex" style="margin-bottom: 0.5rem;">
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
+                                </h4>
+                                <button class="icon-btn" onclick="expandChart('capXirrChart', 'Cap XIRR Performance')">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                            <div class="chart-container small"><canvas id="capXirrChart"></canvas></div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -237,15 +311,27 @@
 
                 <div class="card full-width-chart">
                     <div class="chart-header">
-                        <h3>Total Monthly Investment Trends</h3>
+                        <div class="header-main">
+                            <h3>Total Monthly Investment Trends</h3>
+                            <div class="filter-pills" id="trend-range-filters">
+                                <button class="pill-btn" onclick="updateTrendRange('1M')">1M</button>
+                                <button class="pill-btn" onclick="updateTrendRange('3M')">3M</button>
+                                <button class="pill-btn" onclick="updateTrendRange('6M')">6M</button>
+                                <button class="pill-btn" onclick="updateTrendRange('1Y')">1Y</button>
+                                <button class="pill-btn" onclick="updateTrendRange('3Y')">3Y</button>
+                                <button class="pill-btn" onclick="updateTrendRange('5Y')">5Y</button>
+                                <button class="pill-btn active" onclick="updateTrendRange('ALL')">All</button>
+                            </div>
+                        </div>
+                        <div class="chart-actions">
+                            <button class="icon-btn"
+                                onclick="expandChart('investmentTrendChart', 'Monthly Investment Trends')">
+                                <i class="fas fa-expand-arrows-alt"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="chart-container large">
                         <canvas id="investmentTrendChart"></canvas>
-                    </div>
-                    <div class="chart-legend-bottom">
-                        <span class="dot actual"></span> Monthly Actual
-                        <span class="dot ma3"></span> 3M Avg
-                        <span class="dot ma6"></span> 6M Avg
                     </div>
                 </div>
 
@@ -261,40 +347,6 @@
                             <tbody id="investment-pivot-body"></tbody>
                         </table>
                     </div>
-                </div>
-            </section>
-
-            <!-- ALLOCATIONS SECTION -->
-            <section id="allocations" class="page-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-pie-chart"></i> Portfolio Allocations</h2>
-                </div>
-                <div class="grid-2x2 split">
-                    <div class="card pie-card">
-                        <h3>Asset Category</h3>
-                        <div class="chart-container small"><canvas id="catChart"></canvas></div>
-                    </div>
-                    <div class="card pie-card">
-                        <h3>AMC Concentration</h3>
-                        <div class="chart-container small"><canvas id="amcChart"></canvas></div>
-                    </div>
-                    <div class="card pie-card">
-                        <h3>Investment Type</h3>
-                        <div class="chart-container small"><canvas id="typeChart"></canvas></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- XIRR SECTION (Renamed/Contextualized) -->
-            <section id="xirr" class="page-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-percentage"></i> Portfolio Performance</h2>
-                </div>
-                <div class="card compact">
-                    <h3>Overall Portfolio XIRR</h3>
-                    <p>Calculated across entire portfolio history.</p>
-                    <div class="kpi-value center highlight" id="xirr-main" style="text-align: center; padding: 1rem 0;">
-                        0%</div>
                 </div>
             </section>
 
@@ -367,64 +419,6 @@
                 </div>
             </section>
 
-            <!-- MANAGEMENT SECTION -->
-            <section id="management" class="page-section">
-                <div class="section-header">
-                    <h2><i class="fas fa-cog"></i> System Management</h2>
-                </div>
-
-                <div class="management-grid">
-                    <div class="card">
-                        <h3>Operations</h3>
-                        <div class="mgmt-actions">
-                            <button class="action-btn active" id="btn-refresh-nav" onclick="refreshNAV()">
-                                <i class="fas fa-sync-alt"></i> <span>Refresh NAV</span>
-                            </button>
-
-                            <div class="upload-management">
-                                <button class="action-btn" id="btn-select-pdf" onclick="triggerUpload()">
-                                    <i class="fas fa-file-medical"></i> <span id="selected-filename">Select CAS
-                                        PDF</span>
-                                </button>
-                                <input type="file" id="cas-upload" accept=".pdf" style="display:none"
-                                    onchange="updateFilename(event)">
-
-                                <div class="password-group">
-                                    <input type="password" id="cas-password" placeholder="CAS PDF Password">
-                                    <button class="action-btn upload-trigger" id="btn-upload-pdf"
-                                        onclick="handleFileUpload()" disabled>
-                                        <i class="fas fa-upload"></i> <span>Upload & Process</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button id="external-link-btn" class="action-btn" style="width: 100%; margin-top: 10px;"
-                                onclick="openExternalUrl()">
-                                <i class="fas fa-external-link-alt"></i> <span>Get CAS Statement (CAMS/KFintech)</span>
-                            </button>
-                        </div>
-                        <div id="op-status" class="status-msg"></div>
-                    </div>
-
-                    <div class="card">
-                        <h3>Data Health (Last Update)</h3>
-                        <div class="stats-list">
-                            <div class="stat-item">
-                                <span class="stat-label">Last File Mod:</span>
-                                <span id="stat-file-date" class="stat-val highlight">Loading...</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Last MF Transaction:</span>
-                                <span id="stat-txn-date" class="stat-val highlight">Loading...</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Last NAV Update:</span>
-                                <span id="stat-nav-date" class="stat-val highlight">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
 
         </main>
 
@@ -433,6 +427,97 @@
         </footer>
 
     </div>
+
+    <!-- FILTER SIDEBAR -->
+    <div id="filter-sidebar" class="filter-sidebar">
+        <div class="sidebar-header">
+            <h3>Filters</h3>
+            <button class="action-btn" onclick="clearAllFilters()" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+                <i class="fas fa-trash-alt"></i> Clear All
+            </button>
+            <button class="close-btn" onclick="toggleFilterSidebar()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="filter-group">
+            <h4>Asset Categories</h4>
+            <div id="cat-multiselect" class="custom-multiselect" style="width: 100%;">
+                <div class="select-box" onclick="toggleMultiselect('cat-options')">
+                    <span id="selected-cats-label">All Categories</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="cat-options" class="options-container"></div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <h4>AMC Concentration</h4>
+            <div id="amc-multiselect" class="custom-multiselect" style="width: 100%;">
+                <div class="select-box" onclick="toggleMultiselect('amc-options')">
+                    <span id="selected-amc-label">All AMCs</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="amc-options" class="options-container"></div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <h4>Sectors</h4>
+            <div id="sector-multiselect" class="custom-multiselect" style="width: 100%;">
+                <div class="select-box" onclick="toggleMultiselect('sector-options')">
+                    <span id="selected-sector-label">All Sectors</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="sector-options" class="options-container"></div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <h4>Cap Size</h4>
+            <div id="cap-multiselect" class="custom-multiselect" style="width: 100%;">
+                <div class="select-box" onclick="toggleMultiselect('cap-options')">
+                    <span id="selected-cap-label">All Caps</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="cap-options" class="options-container"></div>
+            </div>
+        </div>
+        <div class="filter-group">
+            <h4>Activity State</h4>
+            <div id="activity-multiselect" class="custom-multiselect" style="width: 100%;">
+                <div class="select-box" onclick="toggleMultiselect('activity-options')">
+                    <span id="selected-activity-label">All Activity</span>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div id="activity-options" class="options-container"></div>
+            </div>
+        </div>
+        <div class="filter-group" style="margin-top: 1rem;">
+            <h4>Options</h4>
+            <button id="hide-zero-btn" class="action-btn active" style="width: 100%; justify-content: flex-start;"
+                onclick="toggleZeroHoldings()">
+                <i class="fas fa-eye-slash"></i> <span>Hide Zero Holdings</span>
+            </button>
+        </div>
+    </div>
+    <div id="filter-overlay" class="sidebar-overlay" onclick="toggleFilterSidebar()"></div>
+
+    <!-- CHART MODAL -->
+    <div id="chart-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title-desc">
+                    <h2 id="modal-chart-title">Chart Title</h2>
+                    <div id="modal-range-filters" class="chart-range-filters">
+                        <!-- Filled dynamically based on chart type -->
+                    </div>
+                </div>
+                <button class="close-modal" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="chart-container large">
+                    <canvas id="modalChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 

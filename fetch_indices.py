@@ -18,7 +18,6 @@ def get_tickers(only_important=True):
         return df[df['Importance'] == 'important']
     return df
 
-
 def fetch_data():
     """Fetches data for indices and commodities with simple date handling and deduplication."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -29,7 +28,6 @@ def fetch_data():
         return
 
     print(f"Starting fetch at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}...")
-    today = datetime.now().date()
     
     for _, row in tickers_df.iterrows():
         name = str(row['Name']).replace(' ', '_').replace('&', 'and').lower()
@@ -38,17 +36,20 @@ def fetch_data():
         
         print(f"Processing {row['Name']} ({ticker_symbol})...")
         
-        if not os.path.exists(file_path):
-            existing_df = pd.DataFrame()
-        else:
-            existing_df = pd.read_csv(file_path)
+        existing_df = pd.DataFrame()
         start_date = None
         
-        if not existing_df.empty:
-            last_date = existing_df['Date'].max()
-            # Fetch from last_date inclusive to handle potential gaps or updates
-            start_date = last_date #.strftime('%Y-%m-%d')
-            print(f"  Existing data found up to {last_date}. Fetching from {start_date}")
+        if os.path.exists(file_path):
+            try:
+                # Read, ensure Date is naive date script
+                existing_df = pd.read_csv(file_path)
+                if not existing_df.empty:
+                    existing_df['Date'] = pd.to_datetime(existing_df['Date']).dt.date
+                    last_date = existing_df['Date'].max()
+                    start_date = last_date.strftime('%Y-%m-%d')
+                    print(f"  Existing data found up to {last_date}. Fetching from {start_date}")
+            except Exception as e:
+                print(f"  Error reading existing file {file_path}: {e}")
 
         try:
             ticker = yf.Ticker(ticker_symbol)
@@ -56,8 +57,6 @@ def fetch_data():
             
             if start_date:
                 df = ticker.history(start=start_date)
-                print('-'*40)
-                print(df.head())
             else:
                 try:
                     df = ticker.history(period="max")
@@ -81,11 +80,9 @@ def fetch_data():
             # Convert new data Date to naive date
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             
-            # DEDUPLICATION LOGIC
+            # Deduplication and merging
             if not existing_df.empty:
                 combined_df = pd.concat([existing_df, df], ignore_index=True)
-                # Ensure Date is comparable
-                combined_df['Date'] = pd.to_datetime(combined_df['Date']).dt.date
                 combined_df = combined_df.drop_duplicates(subset=['Date'], keep='last')
                 combined_df = combined_df.sort_values('Date')
                 combined_df.to_csv(file_path, index=False)
