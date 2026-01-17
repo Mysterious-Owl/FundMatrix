@@ -97,10 +97,21 @@ function getSmartScale(dataPoints) {
 // NAVIGATION LOGIC
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    if (!sidebar || !overlay) return;
+    const body = document.body;
+    if (!sidebar) return;
+
     sidebar.classList.toggle('active');
-    overlay.classList.toggle('active');
+    body.classList.toggle('sidebar-expanded');
+
+    const icon = document.getElementById('lock-icon');
+    const text = document.querySelector('#lock-btn .nav-text');
+    if (sidebar.classList.contains('active')) {
+        if (icon) icon.className = 'fas fa-angle-double-left';
+        if (text) text.textContent = 'Collapse';
+    } else {
+        if (icon) icon.className = 'fas fa-angle-double-right';
+        if (text) text.textContent = 'Expand';
+    }
 }
 
 function toggleFilterSidebar() {

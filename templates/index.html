@@ -15,34 +15,33 @@
     <!-- SIDEBAR NAVIGATION -->
     <div id="sidebar" class="sidebar">
         <div class="sidebar-header">
-            <h3>Menu</h3>
-            <button class="close-btn" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
+            <div class="logo-icon"><i class="fas fa-microchip"></i></div>
+            <span class="logo-text">FundMatrix</span>
         </div>
         <nav class="sidebar-nav">
             <button class="side-tab-btn" onclick="scrollToSection('overview')"><i class="fas fa-home"></i>
-                Overview</button>
-            <button class="side-tab-btn" onclick="scrollToSection('gains')"><i class="fas fa-chart-line"></i> Gains
-                Analysis</button>
+                <span class="nav-text">Overview</span></button>
+            <button class="side-tab-btn" onclick="scrollToSection('gains')"><i class="fas fa-chart-line"></i>
+                <span class="nav-text">Gains Analysis</span></button>
             <button class="side-tab-btn" onclick="scrollToSection('investments')"><i class="fas fa-history"></i>
-                Investment Summary</button>
-            <button class="side-tab-btn" onclick="scrollToSection('allocations')"><i class="fas fa-pie-chart"></i>
-                Allocations</button>
-            <button class="side-tab-btn" onclick="scrollToSection('xirr')"><i class="fas fa-percentage"></i> XIRR &
-                Returns</button>
+                <span class="nav-text">Investment Summary</span></button>
             <button class="side-tab-btn" onclick="scrollToSection('rolling')"><i class="fas fa-wave-square"></i>
-                Rolling Returns</button>
+                <span class="nav-text">Rolling Returns</span></button>
             <button class="side-tab-btn" onclick="scrollToSection('comparison')"><i class="fas fa-balance-scale"></i>
-                Performance Comparison</button>
+                <span class="nav-text">Performance Comparison</span></button>
         </nav>
+        <div class="sidebar-footer">
+            <button class="side-tab-btn" onclick="toggleSidebar()" id="lock-btn">
+                <i class="fas fa-angle-double-right" id="lock-icon"></i>
+                <span class="nav-text">Expand</span>
+            </button>
+        </div>
     </div>
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <div class="container wide">
         <header id="top-header" class="sticky-header">
             <div class="header-left">
-                <button class="hamburger-btn" onclick="toggleSidebar()">
-                    <i class="fas fa-bars"></i>
-                </button>
                 <div class="header-brand">
                     <h1>Portfolio Intelligence <span class="badge">PRO</span></h1>
                 </div>
