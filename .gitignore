@@ -13,3 +13,5 @@ __pycache__
 salary_format.ipynb
 Mf.ipynb
 !data/mf-props.csv
+!data/indices.csv
+temp.ipynb
