@@ -47,6 +47,28 @@
                 </div>
             </div>
 
+            <div class="header-center">
+                <div id="scheme-multiselect" class="custom-multiselect searchable-multiselect">
+                    <div class="select-box" onclick="toggleMultiselect('scheme-options')">
+                        <span id="selected-schemes-label">All Schemes</span>
+                        <div class="header-search-actions">
+                            <button class="clear-search-btn" onclick="clearSchemeSelection(event)"
+                                title="Clear Selection">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <i class="fas fa-search"></i>
+                        </div>
+                    </div>
+                    <div id="scheme-options" class="options-container">
+                        <div class="search-box-container">
+                            <input type="text" id="scheme-search-input" placeholder="Search schemes..."
+                                oninput="filterSchemeOptions(this.value)">
+                        </div>
+                        <div id="scheme-options-list" class="options-list"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="header-right">
                 <a href="/settings" class="icon-btn" title="Settings">
                     <i class="fas fa-cog"></i>
@@ -109,9 +131,8 @@
                             </div>
                         </div>
                         <div class="chart-actions">
-                            <button class="icon-btn" onclick="expandChart('growthChart', 'Portfolio Wealth Journey')">
-                                <i class="fas fa-expand-arrows-alt"></i>
-                            </button>
+                            <button class="icon-btn" onclick="expandChart('growthChart', 'Portfolio Wealth Journey')"><i
+                                    class="fas fa-expand-arrows-alt"></i></button>
                         </div>
                     </div>
                     <div class="chart-container large">
@@ -123,19 +144,16 @@
                     <div class="card pie-card">
                         <div class="card-header-flex">
                             <h3>Asset Category</h3>
-                            <button class="icon-btn" onclick="expandChart('catChart', 'Asset Category Allocation')">
-                                <i class="fas fa-expand"></i>
-                            </button>
+                            <button class="icon-btn" onclick="expandChart('catChart', 'Asset Category Allocation')"><i
+                                    class="fas fa-expand"></i></button>
                         </div>
                         <div class="chart-container small"><canvas id="catChart"></canvas></div>
                         <div class="xirr-bar-container">
                             <div class="card-header-flex" style="margin-bottom: 0.5rem;">
-                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
-                                </h4>
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted);">Performance (XIRR %)</h4>
                                 <button class="icon-btn"
-                                    onclick="expandChart('catXirrChart', 'Asset Category XIRR Performance')">
-                                    <i class="fas fa-expand"></i>
-                                </button>
+                                    onclick="expandChart('catXirrChart', 'Asset Category XIRR Performance')"><i
+                                        class="fas fa-expand-arrows-alt"></i></button>
                             </div>
                             <div class="chart-container small"><canvas id="catXirrChart"></canvas></div>
                         </div>
@@ -143,18 +161,17 @@
                     <div class="card pie-card">
                         <div class="card-header-flex">
                             <h3>AMC Concentration</h3>
-                            <button class="icon-btn" onclick="expandChart('amcChart', 'AMC Concentration Allocation')">
-                                <i class="fas fa-expand"></i>
-                            </button>
+                            <button class="icon-btn"
+                                onclick="expandChart('amcChart', 'AMC Concentration Allocation')"><i
+                                    class="fas fa-expand"></i></button>
                         </div>
                         <div class="chart-container small"><canvas id="amcChart"></canvas></div>
                         <div class="xirr-bar-container">
                             <div class="card-header-flex" style="margin-bottom: 0.5rem;">
-                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
-                                </h4>
-                                <button class="icon-btn" onclick="expandChart('amcXirrChart', 'AMC XIRR Performance')">
-                                    <i class="fas fa-expand"></i>
-                                </button>
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted);">Performance (XIRR %)</h4>
+                                <button class="icon-btn"
+                                    onclick="expandChart('amcXirrChart', 'AMC XIRR Performance')"><i
+                                        class="fas fa-expand-arrows-alt"></i></button>
                             </div>
                             <div class="chart-container small"><canvas id="amcXirrChart"></canvas></div>
                         </div>
@@ -162,19 +179,16 @@
                     <div class="card pie-card">
                         <div class="card-header-flex">
                             <h3>Sector Allocation</h3>
-                            <button class="icon-btn" onclick="expandChart('sectorChart', 'Sector Allocation')">
-                                <i class="fas fa-expand"></i>
-                            </button>
+                            <button class="icon-btn" onclick="expandChart('sectorChart', 'Sector Allocation')"><i
+                                    class="fas fa-expand"></i></button>
                         </div>
                         <div class="chart-container small"><canvas id="sectorChart"></canvas></div>
                         <div class="xirr-bar-container">
                             <div class="card-header-flex" style="margin-bottom: 0.5rem;">
-                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
-                                </h4>
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted);">Performance (XIRR %)</h4>
                                 <button class="icon-btn"
-                                    onclick="expandChart('sectorXirrChart', 'Sector XIRR Performance')">
-                                    <i class="fas fa-expand"></i>
-                                </button>
+                                    onclick="expandChart('sectorXirrChart', 'Sector XIRR Performance')"><i
+                                        class="fas fa-expand-arrows-alt"></i></button>
                             </div>
                             <div class="chart-container small"><canvas id="sectorXirrChart"></canvas></div>
                         </div>
@@ -182,18 +196,16 @@
                     <div class="card pie-card">
                         <div class="card-header-flex">
                             <h3>Cap Allocation</h3>
-                            <button class="icon-btn" onclick="expandChart('capChart', 'Cap Allocation')">
-                                <i class="fas fa-expand"></i>
-                            </button>
+                            <button class="icon-btn" onclick="expandChart('capChart', 'Cap Allocation')"><i
+                                    class="fas fa-expand"></i></button>
                         </div>
                         <div class="chart-container small"><canvas id="capChart"></canvas></div>
                         <div class="xirr-bar-container">
                             <div class="card-header-flex" style="margin-bottom: 0.5rem;">
-                                <h4 style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Returns (XIRR %)
-                                </h4>
-                                <button class="icon-btn" onclick="expandChart('capXirrChart', 'Cap XIRR Performance')">
-                                    <i class="fas fa-expand"></i>
-                                </button>
+                                <h4 style="font-size: 0.8rem; color: var(--text-muted);">Performance (XIRR %)</h4>
+                                <button class="icon-btn"
+                                    onclick="expandChart('capXirrChart', 'Cap XIRR Performance')"><i
+                                        class="fas fa-expand-arrows-alt"></i></button>
                             </div>
                             <div class="chart-container small"><canvas id="capXirrChart"></canvas></div>
                         </div>
@@ -212,10 +224,6 @@
                         <div class="card">
                             <div class="card-header-flex">
                                 <h3>Scheme-level Profitability Analysis</h3>
-                                <div class="search-container">
-                                    <input type="text" id="scheme-search" placeholder="Search schemes..."
-                                        oninput="filterTable()">
-                                </div>
                             </div>
                             <div class="table-container expanded">
                                 <table class="sortable-table">
@@ -253,38 +261,32 @@
 
                     <div class="gains-side-col">
                         <div class="card">
-                            <h3>Taxation Summary</h3>
-                            <div class="gain-row sub">
-                                <span>Unrealized STCG</span>
-                                <span id="unrealized-stcg" class="money">₹0</span>
+                            <div class="card-header-flex">
+                                <h3>Taxation Summary</h3>
+                                <div class="filter-pills" id="tax-fy-filters">
+                                    <button class="pill-btn active" onclick="updateTaxFY('ALL')">All</button>
+                                    <button class="pill-btn" onclick="updateTaxFY('CURRENT')">Current FY</button>
+                                    <button class="pill-btn" onclick="updateTaxFY('LAST')">Last FY</button>
+                                </div>
                             </div>
-                            <div class="gain-row sub">
-                                <span>Unrealized LTCG</span>
-                                <span id="unrealized-ltcg" class="money">₹0</span>
-                            </div>
-                            <div class="total-row sub">
-                                <span>Total Unrealized</span>
-                                <span id="unrealized-total" class="money">₹0</span>
-                            </div>
-                            <hr style="opacity:0.1; margin: 1rem 0;">
-                            <div class="gain-row sub">
-                                <span>Realized STCG</span>
-                                <span id="realized-stcg" class="money">₹0</span>
-                            </div>
-                            <div class="gain-row sub">
-                                <span>Realized LTCG</span>
-                                <span id="realized-ltcg" class="money">₹0</span>
-                            </div>
-                            <div class="total-row sub">
-                                <span>Total Realized</span>
-                                <span id="realized-total" class="money">₹0</span>
+                            <div class="table-container small" style="margin-top: 1rem;">
+                                <table class="summary-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th style="text-align:right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tax-summary-body">
+                                        <!-- Will be filled by JS -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
                         <!-- TRANSITION PLANNING INSIDE SIDE COL OR FULL WIDTH? USER SAID GAIN ANALYSIS HALF WIDTH -->
                         <div class="card">
-                            <h3>Transition Planning (STCG \u2192 LTCG)</h3>
-                            <p class="card-sub">Next 90 Days. Click headers to expand.</p>
+                            <h3>Transition Planning (STCG to LTCG)</h3>
                             <div class="table-container small">
                                 <table class="collapsible-table">
                                     <thead>
@@ -324,9 +326,8 @@
                         </div>
                         <div class="chart-actions">
                             <button class="icon-btn"
-                                onclick="expandChart('investmentTrendChart', 'Monthly Investment Trends')">
-                                <i class="fas fa-expand-arrows-alt"></i>
-                            </button>
+                                onclick="expandChart('investmentTrendChart', 'Monthly Investment Trends')"><i
+                                    class="fas fa-expand-arrows-alt"></i></button>
                         </div>
                     </div>
                     <div class="chart-container large">
@@ -405,11 +406,16 @@
                         <table class="sortable-table">
                             <thead>
                                 <tr>
-                                    <th>Fund Name</th>
-                                    <th style="text-align:right">Your XIRR</th>
-                                    <th style="text-align:right">Fund CAGR</th>
-                                    <th style="text-align:right">Alpha / Delta</th>
-                                    <th style="text-align:right">Holding Period</th>
+                                    <th onclick="sortComparison('fund')" style="cursor:pointer">Fund Name <i
+                                            class="fas fa-sort"></i></th>
+                                    <th onclick="sortComparison('xirr')" style="text-align:right; cursor:pointer">Your
+                                        XIRR <i class="fas fa-sort"></i></th>
+                                    <th onclick="sortComparison('fund_cagr')" style="text-align:right; cursor:pointer">
+                                        Fund CAGR <i class="fas fa-sort"></i></th>
+                                    <th onclick="sortComparison('alpha')" style="text-align:right; cursor:pointer">Alpha
+                                        / Delta <i class="fas fa-sort"></i></th>
+                                    <th onclick="sortComparison('years')" style="text-align:right; cursor:pointer">
+                                        Holding Period <i class="fas fa-sort"></i></th>
                                 </tr>
                             </thead>
                             <tbody id="comparison-body"></tbody>

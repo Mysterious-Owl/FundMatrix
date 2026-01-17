@@ -6,6 +6,7 @@ let selectedActivities = [];
 let selectedAMCs = [];
 let selectedSectors = [];
 let selectedCaps = [];
+let selectedSchemes = [];
 
 const CHART_FILTER_TYPES = {
     'catChart': 'category', 'catXirrChart': 'category',
@@ -18,6 +19,8 @@ let activeModalTitle = null;
 let searchQuery = "";
 let collapsedBuckets = new Set();
 let currentRollingSort = { column: 'mean', order: 'desc' };
+let currentComparisonSort = { column: 'alpha', order: 'desc' };
+let currentTaxFY = 'ALL';
 let currentGrowthRange = 'ALL';
 let currentTrendRange = 'ALL';
 
@@ -163,7 +166,8 @@ function updateSelectedFilterLabels() {
         { list: selectedAMCs, labelId: 'selected-amc-label', default: 'All AMCs', suffix: 'AMCs' },
         { list: selectedSectors, labelId: 'selected-sector-label', default: 'All Sectors', suffix: 'Sectors' },
         { list: selectedCaps, labelId: 'selected-cap-label', default: 'All Caps', suffix: 'Caps' },
-        { list: selectedActivities, labelId: 'selected-activity-label', default: 'All Activity', suffix: 'Activity Types' }
+        { list: selectedActivities, labelId: 'selected-activity-label', default: 'All Activity', suffix: 'Activity Types' },
+        { list: selectedSchemes, labelId: 'selected-schemes-label', default: 'All Schemes', suffix: 'Schemes' }
     ];
     filters.forEach(f => {
         const el = document.getElementById(f.labelId);
@@ -226,6 +230,19 @@ function initializeDashboard() {
         </div>
     `).join('');
 
+    // Populate Schemes
+    const schemeContainer = document.getElementById('scheme-options-list');
+    if (schemeContainer && dashboardData.scheme_details) {
+        // Sort schemes alphabetically by name
+        const schemes = [...dashboardData.scheme_details].sort((a, b) => a['Fund Name'].localeCompare(b['Fund Name']));
+        schemeContainer.innerHTML = schemes.map(s => `
+            <div class="option" onclick="toggleFilter('scheme', '${s.ISIN}', event)">
+                <input type="checkbox" id="check-scheme-${s.ISIN}" ${selectedSchemes.includes(s.ISIN) ? 'checked' : ''}>
+                <label>${s['Fund Name']}</label>
+            </div>
+        `).join('');
+    }
+
     const bucketLabels = ['Inside 7 Days', '8 - 14 Days', '15 - 30 Days', '1 - 2 Months', '2 - 3 Months'];
     bucketLabels.forEach(label => collapsedBuckets.add(label));
 
@@ -240,7 +257,8 @@ function toggleFilter(type, value, event) {
         'activity': selectedActivities,
         'amc': selectedAMCs,
         'sector': selectedSectors,
-        'cap': selectedCaps
+        'cap': selectedCaps,
+        'scheme': selectedSchemes
     };
     let list = map[type];
     const idx = list.indexOf(value);
@@ -254,12 +272,31 @@ function toggleFilter(type, value, event) {
     refreshAll();
 }
 
+function filterSchemeOptions(query) {
+    const q = query.toLowerCase();
+    const container = document.getElementById('scheme-options-list');
+    const options = container.querySelectorAll('.option');
+    options.forEach(opt => {
+        const text = opt.querySelector('label').textContent.toLowerCase();
+        opt.style.display = text.includes(q) ? 'flex' : 'none';
+    });
+}
+
+function clearSchemeSelection(event) {
+    if (event) event.stopPropagation();
+    selectedSchemes = [];
+    document.querySelectorAll('[id^="check-scheme-"]').forEach(cb => cb.checked = false);
+    updateSelectedFilterLabels();
+    refreshAll();
+}
+
 function clearAllFilters() {
     selectedCategories = [];
     selectedActivities = [];
     selectedAMCs = [];
     selectedSectors = [];
     selectedCaps = [];
+    selectedSchemes = [];
 
     // Uncheck all checkboxes
     document.querySelectorAll('.options-container input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -301,11 +338,6 @@ function toggleZeroHoldings() {
     refreshAll();
 }
 
-function filterTable() {
-    searchQuery = document.getElementById('scheme-search').value.toLowerCase();
-    renderGains();
-}
-
 function sortData(col) {
     if (currentSort.column === col) currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
     else { currentSort.column = col; currentSort.order = 'desc'; }
@@ -319,6 +351,7 @@ function getFilteredData() {
     if (selectedAMCs.length > 0) filtered = filtered.filter(s => selectedAMCs.includes(s.AMC));
     if (selectedSectors.length > 0) filtered = filtered.filter(s => selectedSectors.includes(s.Sector));
     if (selectedCaps.length > 0) filtered = filtered.filter(s => selectedCaps.includes(s.Cap));
+    if (selectedSchemes.length > 0) filtered = filtered.filter(s => selectedSchemes.includes(s.ISIN));
     if (hideZero) filtered = filtered.filter(s => s.current_val > 0);
     return filtered;
 }
@@ -334,11 +367,18 @@ function getFilteredCashFlows() {
 function filterDataByRange(data, range, dateField = 'date') {
     if (range === 'ALL' || !data || data.length === 0) return data;
     const now = new Date();
-    const rangeMap = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '3Y': 36, '5Y': 60 };
-    const months = rangeMap[range];
+    const rangeMap = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12, '2Y': 24, '3Y': 36, '5Y': 60 };
+    const months = rangeMap[range] || (parseInt(range) * 12);
+
+    // Create UTC cutoff to avoid timezone issues with daily data
     const cutoff = new Date();
     cutoff.setMonth(now.getMonth() - months);
-    return data.filter(d => new Date(d[dateField]) >= cutoff);
+    cutoff.setHours(0, 0, 0, 0);
+
+    return data.filter(d => {
+        const dDate = new Date(d[dateField]);
+        return dDate >= cutoff;
+    });
 }
 
 function updateGrowthRange(range) {
@@ -357,6 +397,15 @@ function updateTrendRange(range) {
     renderInvestments();
 }
 
+function updateTaxFY(fy) {
+    currentTaxFY = fy;
+    const labels = { 'ALL': 'All', 'CURRENT': 'Current FY', 'LAST': 'Last FY' };
+    document.querySelectorAll('#tax-fy-filters .pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === labels[fy]);
+    });
+    renderGains();
+}
+
 function expandChart(chartId, title) {
     activeModalChartId = chartId;
     activeModalTitle = title;
@@ -370,15 +419,43 @@ function expandChart(chartId, title) {
     // Populate Modal Range Filters if it's a line chart
     const filterContainer = document.getElementById('modal-range-filters');
     filterContainer.innerHTML = '';
+
     if (chartId === 'growthChart' || chartId === 'investmentTrendChart') {
         const currentRange = (chartId === 'growthChart') ? currentGrowthRange : currentTrendRange;
-        const ranges = ['1M', '6M', '1Y', 'ALL'];
+
+        // Calculate dynamic ranges
+        let totalMonths = 12; // default
+        if (chartId === 'growthChart' && dashboardData.growth_chart.length > 0) {
+            const start = new Date(dashboardData.growth_chart[0].date);
+            const end = new Date(dashboardData.growth_chart[dashboardData.growth_chart.length - 1].date);
+            totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+        } else if (chartId === 'investmentTrendChart' && dashboardData.investment_summary.months.length > 0) {
+            totalMonths = dashboardData.investment_summary.months.length;
+        }
+
+        const ranges = ['1M', '3M', '6M', '1Y', '2Y', '3Y'];
+
+        // Add 5Y multiples
+        for (let y = 5; y * 12 <= totalMonths; y += 5) {
+            ranges.push(y + 'Y');
+        }
+
+        // Ensure "All" is always at the end
+        if (!ranges.includes('ALL')) ranges.push('ALL');
+
         ranges.forEach(r => {
-            const btn = document.createElement('button');
-            btn.className = `pill-btn ${r === currentRange ? 'active' : ''}`;
-            btn.textContent = r === 'ALL' ? 'All' : r;
-            btn.onclick = () => updateModalRange(r);
-            filterContainer.appendChild(btn);
+            // Only add button if range is within available data (except ALL)
+            let months = 0;
+            if (r.endsWith('M')) months = parseInt(r);
+            else if (r.endsWith('Y')) months = parseInt(r) * 12;
+
+            if (r === 'ALL' || months <= totalMonths) {
+                const btn = document.createElement('button');
+                btn.className = `pill-btn ${r === currentRange ? 'active' : ''}`;
+                btn.textContent = r === 'ALL' ? 'All' : r;
+                btn.onclick = () => updateModalRange(r);
+                filterContainer.appendChild(btn);
+            }
         });
     }
 
@@ -394,20 +471,62 @@ function renderModalChart() {
     const existing = Chart.getChart('modalChart');
     if (existing) existing.destroy();
 
-    // Reconstruct chart for modal with optimizations for speed
+    // Use raw config objects to avoid recursion/state pollution from live instances
+    const rawOptions = originalChart.config.options || {};
+    const rawData = originalChart.config.data || { labels: [], datasets: [] };
+
+    const currentRange = (activeModalChartId === 'growthChart') ? currentGrowthRange : currentTrendRange;
+    const isDaily = currentRange.endsWith('M') || currentRange === '1Y';
+
+    const isPie = (originalChart.config.type === 'pie' || originalChart.config.type === 'doughnut');
+
     new Chart(modalCtx, {
         type: originalChart.config.type,
-        data: originalChart.data,
+        data: rawData,
         options: {
-            ...originalChart.options,
+            ...rawOptions,
             maintainAspectRatio: false,
-            animation: { duration: 0 }, // Disable animation for instant modal feel
+            animation: { duration: 0 },
             plugins: {
-                ...originalChart.options.plugins,
+                ...(rawOptions.plugins || {}),
                 legend: {
-                    display: true,
-                    position: 'top',
+                    display: rawOptions.plugins?.legend?.display !== undefined ? rawOptions.plugins.legend.display : true,
+                    position: isPie ? 'right' : 'top',
                     labels: { color: '#cbd5e1', font: { size: 12 } }
+                }
+            },
+            scales: isPie ? { x: { display: false }, y: { display: false } } : {
+                ...(rawOptions.scales || {}),
+                x: {
+                    ...(rawOptions.scales?.x || {}),
+                    ticks: {
+                        ...(rawOptions.scales?.x?.ticks || {}),
+                        autoSkip: true,
+                        maxRotation: 45,
+                        minRotation: 45,
+                        callback: function (val, index) {
+                            const label = this.getLabelForValue(val);
+                            if (!label) return '';
+                            const date = new Date(label);
+                            if (isNaN(date.getTime())) { // Not a date, likely 'DD MM YYYY' format from investmentTrendChart
+                                const parts = label.split(' ');
+                                if (parts.length === 2) { // "01 2024" -> "01-01-2024"
+                                    const month = parts[0];
+                                    const year = parts[1];
+                                    const dateFromParts = new Date(`${month}-01-${year}`);
+                                    if (!isNaN(dateFromParts.getTime())) {
+                                        return dateFromParts.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                                    }
+                                }
+                                return label; // Fallback for non-date labels
+                            }
+
+                            if (isDaily && activeModalChartId === 'growthChart') {
+                                if (date.getDate() !== 1 && index !== 0) return '';
+                            }
+                            return date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                        }
+                    }
                 }
             }
         }
@@ -481,6 +600,9 @@ function renderOverview() {
     const growthCtx = document.getElementById('growthChart').getContext('2d');
     const existingGrowth = Chart.getChart('growthChart');
     if (existingGrowth) existingGrowth.destroy();
+
+    const isDaily = currentGrowthRange.endsWith('M') || currentGrowthRange === '1Y';
+
     new Chart(growthCtx, {
         type: 'line', data: {
             labels: filteredGrowth.map(d => d.date),
@@ -494,10 +616,35 @@ function renderOverview() {
             interaction: { intersect: false, mode: 'index' },
             plugins: {
                 legend: { display: false },
-                tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtMoney(c.raw)}` } }
+                tooltip: {
+                    callbacks: {
+                        title: (items) => {
+                            const date = new Date(items[0].label);
+                            return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                        },
+                        label: (c) => `${c.dataset.label}: ${fmtMoney(c.raw)}`
+                    }
+                }
             },
             scales: {
-                x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#64748b',
+                        font: { size: 10 },
+                        autoSkip: true,
+                        maxRotation: 45,
+                        minRotation: 45,
+                        callback: function (val, index) {
+                            const date = new Date(this.getLabelForValue(val));
+                            if (isDaily) {
+                                // Only show label for 1st of month if daily data
+                                if (date.getDate() !== 1 && index !== 0) return '';
+                            }
+                            return date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                        }
+                    }
+                },
                 y: {
                     ...getSmartScale([...filteredGrowth.map(d => d.value), ...filteredGrowth.map(d => d.invested)]),
                     grid: { color: 'rgba(255,255,255,0.05)' },
@@ -523,14 +670,17 @@ function renderGains() {
         return 0;
     });
 
+    let runningTotalLTCG = 0;
     tableBody.innerHTML = filtered.map(s => {
         // Calculate Scheme-Specific XIRR
         const schemeFlows = dashboardData.cash_flows.filter(cf => cf.isin === s.ISIN);
         const schemeXirr = calculateJS_XIRR(schemeFlows);
 
+        runningTotalLTCG += (s.unrealized_ltcg || 0);
+
         return `
             <tr>
-                <td style="font-weight:600; min-width: 250px;">${s['Fund Name']}</td>
+                <td style="font-weight:600; min-width: 200px;">${s['Fund Name']}</td>
                 <td style="text-align:right">${fmtPrice(s.invested_val)}</td>
                 <td style="text-align:right">${fmtPrice(s.current_val)}</td>
                 <td style="text-align:right" class="${s.unrealized_stcg >= 0 ? 'positive' : 'negative'}">${fmtPrice(s.unrealized_stcg)}</td>
@@ -539,22 +689,47 @@ function renderGains() {
                 <td style="text-align:right; font-weight:700" class="${s.abs_return >= 0 ? 'positive' : 'negative'}">${s.abs_return.toFixed(3)}%</td>
                 <td style="text-align:right; font-weight:700" class="${schemeXirr >= 0 ? 'positive' : 'negative'}">${schemeXirr.toFixed(2)}%</td>
                 <td style="text-align:right; color: var(--text-muted); font-size: 0.85rem">${fmtPrice(s.lt_units)}</td>
-                <td style="text-align:right; color: #4ade80; font-size: 0.85rem">${fmtPrice(s.unrealized_ltcg)}</td>
+                <td style="text-align:right; color: #4ade80; font-size: 0.85rem">${fmtPrice(runningTotalLTCG)}</td>
             </tr>
         `;
     }).join('');
 
-    // Update taxation summary (remains same)
-    const u_st = filtered.reduce((a, b) => a + b.unrealized_stcg, 0);
-    const u_lt = filtered.reduce((a, b) => a + b.unrealized_ltcg, 0);
-    const r_st = filtered.reduce((a, b) => a + b.realized_stcg, 0);
-    const r_lt = filtered.reduce((a, b) => a + b.realized_ltcg, 0);
-    if (document.getElementById('unrealized-stcg')) document.getElementById('unrealized-stcg').textContent = fmtMoney(u_st);
-    if (document.getElementById('unrealized-ltcg')) document.getElementById('unrealized-ltcg').textContent = fmtMoney(u_lt);
-    if (document.getElementById('unrealized-total')) document.getElementById('unrealized-total').textContent = fmtMoney(u_st + u_lt);
-    if (document.getElementById('realized-stcg')) document.getElementById('realized-stcg').textContent = fmtMoney(r_st);
-    if (document.getElementById('realized-ltcg')) document.getElementById('realized-ltcg').textContent = fmtMoney(r_lt);
-    if (document.getElementById('realized-total')) document.getElementById('realized-total').textContent = fmtMoney(r_st + r_lt);
+    // Update Taxation Summary Table
+    const taxBody = document.getElementById('tax-summary-body');
+    if (taxBody) {
+        // Total from FILTERED data
+        let u_st = 0, u_lt = 0, r_st = 0, r_lt = 0;
+
+        filtered.forEach(s => {
+            u_st += (s.unrealized_stcg || 0);
+            u_lt += (s.unrealized_ltcg || 0);
+
+            if (currentTaxFY === 'CURRENT') {
+                r_st += (s.realized_stcg_curr || 0);
+                r_lt += (s.realized_ltcg_curr || 0);
+            } else if (currentTaxFY === 'LAST') {
+                r_st += (s.realized_stcg_last || 0);
+                r_lt += (s.realized_ltcg_last || 0);
+            } else { // ALL
+                r_st += (s.realized_stcg || 0);
+                r_lt += (s.realized_ltcg || 0);
+            }
+        });
+
+        taxBody.innerHTML = `
+            <tr><td>Unrealized STCG</td><td style="text-align:right">${fmtMoney(u_st)}</td></tr>
+            <tr><td>Unrealized LTCG</td><td style="text-align:right" class="positive">${fmtMoney(u_lt)}</td></tr>
+            <tr style="border-top: 1px solid var(--glass-border); font-weight:700">
+                <td>Total Unrealized</td><td style="text-align:right">${fmtMoney(u_st + u_lt)}</td>
+            </tr>
+            <tr style="height: 8px;"></tr>
+            <tr><td>Realized STCG</td><td style="text-align:right">${fmtMoney(r_st)}</td></tr>
+            <tr><td>Realized LTCG</td><td style="text-align:right" class="positive">${fmtMoney(r_lt)}</td></tr>
+            <tr style="border-top: 1px solid var(--glass-border); font-weight:700">
+                <td>Total Realized</td><td style="text-align:right">${fmtMoney(r_st + r_lt)}</td>
+            </tr>
+        `;
+    }
 }
 
 function toggleBucket(label) {
@@ -612,6 +787,7 @@ function renderInvestments() {
     if (selectedAMCs.length > 0) filteredPivot = filteredPivot.filter(p => selectedAMCs.includes(p.AMC));
     if (selectedSectors.length > 0) filteredPivot = filteredPivot.filter(p => selectedSectors.includes(p.Sector));
     if (selectedCaps.length > 0) filteredPivot = filteredPivot.filter(p => selectedCaps.includes(p.Cap));
+    if (selectedSchemes.length > 0) filteredPivot = filteredPivot.filter(p => selectedSchemes.includes(p.ISIN));
 
     if (hideZero) {
         const activeISINs = new Set(dashboardData.scheme_details.filter(s => s.current_val > 0).map(s => s.ISIN));
@@ -633,7 +809,7 @@ function renderInvestments() {
 
         return {
             date: mKeys[idx], // Re-add date for filtering
-            Month: mKeys[idx].split('-').reverse().join(' '), // Approx "01 2024" type
+            Month: mk, // Raw DateKey "YYYY-MM"
             Amount: amt,
             MA3: sum3 / count3,
             MA6: sum6 / count6
@@ -665,7 +841,26 @@ function renderInvestments() {
                     tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ₹ ${fmtPrice(c.raw)}` } }
                 },
                 scales: {
-                    x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+                    x: {
+                        ticks: {
+                            color: '#64748b',
+                            font: { size: 10 },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            callback: function (val) {
+                                const label = this.getLabelForValue(val);
+                                if (!label) return '';
+                                // label is "YYYY-MM"
+                                const parts = label.split('-');
+                                if (parts.length === 2) {
+                                    const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+                                    return date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+                                }
+                                return label;
+                            }
+                        },
+                        grid: { display: false }
+                    },
                     y: {
                         ...getSmartScale([...filteredTrends.map(t => t.Amount), ...filteredTrends.map(t => t.MA3), ...filteredTrends.map(t => t.MA6)]),
                         ticks: { color: '#64748b', callback: (v) => '₹' + fmtSmartValue(v) },
@@ -962,8 +1157,10 @@ function renderPie(canvasId, dataObj) {
                 },
                 datalabels: {
                     display: (context) => {
-                        const val = context.dataset.data[context.dataIndex];
-                        return (val / total) > 0.1; // Only show if > 10%
+                        const dataset = context.dataset.data;
+                        const totalSum = dataset.reduce((a, b) => a + b, 0);
+                        const val = dataset[context.dataIndex];
+                        return totalSum > 0 && (val / totalSum) > 0.1; // Only show if > 10%
                     },
                     formatter: (value, context) => {
                         return context.chart.data.labels[context.dataIndex];
@@ -994,6 +1191,12 @@ function sortRolling(col) {
     if (currentRollingSort.column === col) currentRollingSort.order = currentRollingSort.order === 'asc' ? 'desc' : 'asc';
     else { currentRollingSort.column = col; currentRollingSort.order = 'desc'; }
     renderRollingStats();
+}
+
+function sortComparison(col) {
+    if (currentComparisonSort.column === col) currentComparisonSort.order = currentComparisonSort.order === 'asc' ? 'desc' : 'asc';
+    else { currentComparisonSort.column = col; currentComparisonSort.order = 'desc'; }
+    renderComparison();
 }
 
 function renderRollingStats() {
@@ -1051,21 +1254,42 @@ function renderComparison() {
     const filteredData = getFilteredData();
     const filteredISINs = new Set(filteredData.map(s => s.ISIN));
 
-    let html = "";
-    dashboardData.performance_comparison.forEach(p => {
-        if (!filteredISINs.has(p.isin)) return;
-        const schemeData = filteredData.find(s => s.ISIN === p.isin);
-        if (!schemeData) return;
+    // Prepare data with calculated XIRR and Delta for sorting
+    let displayData = dashboardData.performance_comparison
+        .filter(p => filteredISINs.has(p.isin))
+        .map(p => {
+            const schemeData = filteredData.find(s => s.ISIN === p.isin);
+            const schemeFlows = dashboardData.cash_flows.filter(cf => cf.isin === p.isin);
+            const xirrVal = calculateJS_XIRR(schemeFlows);
+            const delta = xirrVal - p.fund_cagr;
+            return {
+                ...p,
+                xirr: xirrVal,
+                alpha: delta
+            };
+        });
 
-        // Use dynamic XIRR from scheme flows
-        const schemeFlows = dashboardData.cash_flows.filter(cf => cf.isin === p.isin);
-        const xirrVal = calculateJS_XIRR(schemeFlows);
-        const delta = xirrVal - p.fund_cagr;
+    // Apply sorting
+    const col = currentComparisonSort.column;
+    const order = currentComparisonSort.order === 'asc' ? 1 : -1;
+    displayData.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+        if (col === 'fund') {
+            valA = valA.toLowerCase();
+            valB = valB.toLowerCase();
+        }
+        if (valA < valB) return -order;
+        if (valA > valB) return order;
+        return 0;
+    });
 
-        html += `
+    tableBody.innerHTML = displayData.map(p => {
+        const delta = p.alpha;
+        return `
             <tr>
                 <td style="font-weight:600">${p.fund}</td>
-                <td style="text-align:right; font-weight:700">${xirrVal.toFixed(2)}%</td>
+                <td style="text-align:right; font-weight:700">${p.xirr.toFixed(2)}%</td>
                 <td style="text-align:right">${p.fund_cagr}%</td>
                 <td style="text-align:right; font-weight:700" class="${delta >= 0 ? 'positive' : 'negative'}">
                     ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}%
@@ -1073,8 +1297,7 @@ function renderComparison() {
                 <td style="text-align:right; color:var(--text-muted)">${p.years} Years</td>
             </tr>
         `;
-    });
-    tableBody.innerHTML = html;
+    }).join('');
 }
 
 // MANAGEMENT LOGIC

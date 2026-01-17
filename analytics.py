@@ -109,18 +109,39 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
     stcg_unreal = unified_df[unified_df['gain_type'] == 'STCG'].groupby('ISIN')['unrealized_gain'].sum().to_dict()
     ltcg_unreal = unified_df[unified_df['gain_type'] == 'LTCG'].groupby('ISIN')['unrealized_gain'].sum().to_dict()
     ltcg_units = unified_df[unified_df['gain_type'] == 'LTCG'].groupby('ISIN')['units_left'].sum().to_dict()
+    today = datetime.now()
+    if today.month < 4:
+        curr_fy_start = datetime(today.year - 1, 4, 1)
+        last_fy_start = datetime(today.year - 2, 4, 1)
+        last_fy_end = datetime(today.year - 1, 3, 31)
+    else:
+        curr_fy_start = datetime(today.year, 4, 1)
+        last_fy_start = datetime(today.year - 1, 4, 1)
+        last_fy_end = datetime(today.year, 3, 31)
+
+    net_inv_map = cams_df.groupby('ISIN')['Amount'].sum().to_dict()
     real_st = realized_df[realized_df['Type'] == 'STCG'].groupby('ISIN')['Gain'].sum().to_dict() if not realized_df.empty else {}
     real_lt = realized_df[realized_df['Type'] == 'LTCG'].groupby('ISIN')['Gain'].sum().to_dict() if not realized_df.empty else {}
-    net_inv_map = cams_df.groupby('ISIN')['Amount'].sum().to_dict()
-
-    # Aggregate realized gains for easier lookup
+    
     realized_summary = {}
-    for isin, gain in real_st.items():
-        realized_summary.setdefault(isin, {'realized_gain': 0, 'realized_stcg': 0, 'realized_ltcg': 0})['realized_gain'] += gain
-        realized_summary[isin]['realized_stcg'] += gain
-    for isin, gain in real_lt.items():
-        realized_summary.setdefault(isin, {'realized_gain': 0, 'realized_stcg': 0, 'realized_ltcg': 0})['realized_gain'] += gain
-        realized_summary[isin]['realized_ltcg'] += gain
+    if not realized_df.empty:
+        # Group by ISIN and calculate everything
+        for isin, group in realized_df.groupby('ISIN'):
+            res = {'realized_gain': group['Gain'].sum(), 'stcg': 0, 'ltcg': 0,
+                   'stcg_curr': 0, 'ltcg_curr': 0, 'stcg_last': 0, 'ltcg_last': 0}
+            
+            res['stcg'] = group[group['Type'] == 'STCG']['Gain'].sum()
+            res['ltcg'] = group[group['Type'] == 'LTCG']['Gain'].sum()
+            
+            curr_fy = group[group['Sell Date'] >= curr_fy_start]
+            res['stcg_curr'] = curr_fy[curr_fy['Type'] == 'STCG']['Gain'].sum()
+            res['ltcg_curr'] = curr_fy[curr_fy['Type'] == 'LTCG']['Gain'].sum()
+            
+            last_fy = group[(group['Sell Date'] >= last_fy_start) & (group['Sell Date'] <= last_fy_end)]
+            res['stcg_last'] = last_fy[last_fy['Type'] == 'STCG']['Gain'].sum()
+            res['ltcg_last'] = last_fy[last_fy['Type'] == 'LTCG']['Gain'].sum()
+            
+            realized_summary[isin] = {k: round(v, 2) for k, v in res.items()}
 
     scheme_list = []
     for _, r in scheme_agg.iterrows():
@@ -135,10 +156,16 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
         detail['unrealized_gain'] = round(r['unrealized_gain'], 2)
         detail['unrealized_stcg'] = round(stcg_unreal.get(isin, 0), 2)
         detail['unrealized_ltcg'] = round(ltcg_unreal.get(isin, 0), 2)
-        detail['realized_stcg'] = round(realized_summary.get(isin, {}).get('realized_stcg', 0), 2)
-        detail['realized_ltcg'] = round(realized_summary.get(isin, {}).get('realized_ltcg', 0), 2)
         
-        total_profit = detail['unrealized_gain'] + realized_summary.get(isin, {}).get('realized_gain', 0)
+        rs = realized_summary.get(isin, {})
+        detail['realized_stcg'] = rs.get('stcg', 0)
+        detail['realized_ltcg'] = rs.get('ltcg', 0)
+        detail['realized_stcg_curr'] = rs.get('stcg_curr', 0)
+        detail['realized_ltcg_curr'] = rs.get('ltcg_curr', 0)
+        detail['realized_stcg_last'] = rs.get('stcg_last', 0)
+        detail['realized_ltcg_last'] = rs.get('ltcg_last', 0)
+        
+        total_profit = detail['unrealized_gain'] + rs.get('realized_gain', 0)
         detail['total_profit'] = round(total_profit, 2)
         detail['abs_return'] = round((total_profit / ni * 100) if ni > 0 else 0, 4)
         
@@ -251,7 +278,7 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
         u_piv = all_ev.pivot_table(index='Date', columns='ISIN', values='Units', aggfunc='sum').fillna(0).cumsum()
         i_cum = all_ev.groupby('Date')['Cost'].sum().cumsum()
         n_piv = nav_history.pivot_table(index='date', columns='isin', values='nav').sort_index().ffill()
-        f_idx = pd.date_range(all_ev['Date'].min(), now, freq='ME')
+        f_idx = pd.date_range(all_ev['Date'].min(), now, freq='D')
         if f_idx[-1] < now:
             f_idx = f_idx.union([pd.Timestamp(now)])
         # Prepare ISIN to Category mapping for easier sum in JS
@@ -276,15 +303,23 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
                     units = u_d[isin]
                     nav = n_d[isin]
                     cost = c_d.get(isin, 0)
-                    if units > 0 or abs(cost) > 0:
+                    
+                    # Handle NaN values to prevent invalid JSON
+                    safe_nav = float(nav) if pd.notnull(nav) else 0.0
+                    safe_cost = float(cost) if pd.notnull(cost) else 0.0
+                    safe_units = float(units) if pd.notnull(units) else 0.0
+                    
+                    val = safe_units * safe_nav
+                    
+                    if safe_units > 0 or abs(safe_cost) > 0:
                         breakdown[isin] = {
-                            'v': round(float(units * nav), 2),
-                            'i': round(float(cost), 2),
+                            'v': round(val, 2),
+                            'i': round(safe_cost, 2),
                             'c': isin_to_cat.get(isin, 'Unknown')
                         }
                 if breakdown:
                     growth_chart.append({
-                        'date': d.strftime('%Y-%m'),
+                        'date': d.strftime('%Y-%m-%d'),
                         'b': breakdown # 'b' for breakdown to save space
                     })
 
@@ -328,9 +363,28 @@ def calculate_analytics(gains_csv, realized_csv, nav_history_csv, props_csv):
     except: pass
     
     # Rest of transitions and realized breakdown
-    real_st_sum = sum(real_st.values()) if real_st else 0
-    real_lt_sum = sum(real_lt.values()) if real_lt else 0
+    real_st_sum = realized_df[realized_df['Type'] == 'STCG']['Gain'].sum() if not realized_df.empty else 0
+    real_lt_sum = realized_df[realized_df['Type'] == 'LTCG']['Gain'].sum() if not realized_df.empty else 0
+    
     dashboard_data["gains_breakdown"]["realized"] = {"stcg": round(real_st_sum, 2), "ltcg": round(real_lt_sum, 2)}
+
+    # FY Breakdown for Realized Gains
+    realized_fy = {
+        "ALL": {"stcg": round(real_st_sum, 2), "ltcg": round(real_lt_sum, 2)},
+        "CURRENT": {"stcg": 0, "ltcg": 0},
+        "LAST": {"stcg": 0, "ltcg": 0}
+    }
+
+    if not realized_df.empty:
+        c_fy = realized_df[realized_df['Sell Date'] >= curr_fy_start]
+        realized_fy["CURRENT"]["stcg"] = round(c_fy[c_fy['Type'] == 'STCG']['Gain'].sum(), 2)
+        realized_fy["CURRENT"]["ltcg"] = round(c_fy[c_fy['Type'] == 'LTCG']['Gain'].sum(), 2)
+        
+        l_fy = realized_df[(realized_df['Sell Date'] >= last_fy_start) & (realized_df['Sell Date'] <= last_fy_end)]
+        realized_fy["LAST"]["stcg"] = round(l_fy[l_fy['Type'] == 'STCG']['Gain'].sum(), 2)
+        realized_fy["LAST"]["ltcg"] = round(l_fy[l_fy['Type'] == 'LTCG']['Gain'].sum(), 2)
+
+    dashboard_data["gains_breakdown"]["realized_fy"] = realized_fy
 
     # Transition Planning
     st_lots = unified_df[unified_df['gain_type'] == 'STCG'].copy()
