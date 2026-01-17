@@ -5,39 +5,98 @@ from datetime import datetime
 
 # CONFIGURATION
 OUTPUT_DIR = 'indices'
-TICKERS = {
-    'Nifty_50': '^NSEI',
-    'Nifty_BANK': '^NSEBANK',
-    'Nifty_500': '^NIFTY500',
-    'Sensex': '^BSESN',
-    'Gold': 'GC=F',
-    'Silver': 'SI=F'
-}
+INDICES_METADATA = 'data/indices.csv'
+
+def get_tickers(only_important=True):
+    """Reads indices.csv and returns tickers based on criteria."""
+    if not os.path.exists(INDICES_METADATA):
+        print(f"Error: {INDICES_METADATA} not found.")
+        return pd.DataFrame()
+
+    df = pd.read_csv(INDICES_METADATA)
+    if only_important:
+        return df[df['Importance'] == 'important']
+    return df
+
 
 def fetch_data():
-    """Fetches data for Indian indices and commodities using yfinance."""
+    """Fetches data for indices and commodities with simple date handling and deduplication."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    tickers_df = get_tickers()
     
-    print(f"Starting data fetch at {datetime.now()}...")
+    if tickers_df.empty:
+        print("No tickers found to fetch.")
+        return
+
+    print(f"Starting fetch at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}...")
+    today = datetime.now().date()
     
-    for name, ticker_symbol in TICKERS.items():
-        print(f"Fetching data for {name} ({ticker_symbol})...")
+    for _, row in tickers_df.iterrows():
+        name = str(row['Name']).replace(' ', '_').replace('&', 'and').lower()
+        ticker_symbol = row['Ticker']
+        file_path = os.path.join(OUTPUT_DIR, f"{name}.csv")
+        
+        print(f"Processing {row['Name']} ({ticker_symbol})...")
+        
+        if not os.path.exists(file_path):
+            existing_df = pd.DataFrame()
+        else:
+            existing_df = pd.read_csv(file_path)
+        start_date = None
+        
+        if not existing_df.empty:
+            last_date = existing_df['Date'].max()
+            # Fetch from last_date inclusive to handle potential gaps or updates
+            start_date = last_date #.strftime('%Y-%m-%d')
+            print(f"  Existing data found up to {last_date}. Fetching from {start_date}")
+
         try:
-            # Fetch data for the last 1 year with daily interval
             ticker = yf.Ticker(ticker_symbol)
-            df = ticker.history(period="max")
+            df = pd.DataFrame()
             
+            if start_date:
+                df = ticker.history(start=start_date)
+                print('-'*40)
+                print(df.head())
+            else:
+                try:
+                    df = ticker.history(period="max")
+                except Exception:
+                    df = ticker.history(period="10y")
+                
+                if df.empty:
+                    df = ticker.history(period="5y")
+
             if df.empty:
-                print(f"Warning: No data found for {name} ({ticker_symbol})")
+                print(f"  No new data found for {ticker_symbol}")
+                # Save sanitized existing data back to ensure format is clean
+                if not existing_df.empty:
+                    existing_df.to_csv(file_path, index=False)
                 continue
                 
-            file_path = os.path.join(OUTPUT_DIR, f"{name.lower()}.csv")
-            df.to_csv(file_path)
-            print(f"Successfully saved {name} data to {file_path}")
+            # Clean and prepare new data
+            df = df.drop(columns=['Dividends', 'Stock Splits'], errors='ignore')
+            df = df.reset_index()
+            
+            # Convert new data Date to naive date
+            df['Date'] = pd.to_datetime(df['Date']).dt.date
+            
+            # DEDUPLICATION LOGIC
+            if not existing_df.empty:
+                combined_df = pd.concat([existing_df, df], ignore_index=True)
+                # Ensure Date is comparable
+                combined_df['Date'] = pd.to_datetime(combined_df['Date']).dt.date
+                combined_df = combined_df.drop_duplicates(subset=['Date'], keep='last')
+                combined_df = combined_df.sort_values('Date')
+                combined_df.to_csv(file_path, index=False)
+                print(f"  Updated {file_path} (Total rows: {len(combined_df)})")
+            else:
+                df.to_csv(file_path, index=False)
+                print(f"  Saved {len(df)} rows to {file_path}")
             
         except Exception as e:
-            print(f"Error fetching data for {name}: {e}")
+            print(f"  Error fetching data for {ticker_symbol}: {e}")
 
 if __name__ == "__main__":
     fetch_data()
-    print("\nData fetch completed.")
+    print("\nFetch completed.")
